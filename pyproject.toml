@@ -1,0 +1,16 @@
+[project]
+name = "adgen-service"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.121.0",
+    "langchain>=1.0.4",
+    "openai>=2.7.1",
+    "python-dotenv>=1.2.1",
+    "streamlit>=1.51.0",
+    "torch>=2.6.0",
+    "torchaudio>=2.6.0",
+    "torchvision>=0.21.0",
+    "tqdm>=4.67.1",
+    "uvicorn>=0.38.0",
+]
