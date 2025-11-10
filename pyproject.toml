@@ -3,6 +3,8 @@ name = "adgen-service"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
+    "accelerate>=1.11.0",
+    "diffusers>=0.35.2",
     "fastapi>=0.121.0",
     "ipykernel>=7.1.0",
     "jupyter>=1.1.1",
@@ -11,11 +13,14 @@ dependencies = [
     "numpy>=2.1.2",
     "openai>=2.7.1",
     "pandas>=2.3.3",
+    "pillow>=11.3.0",
     "python-dotenv>=1.2.1",
+    "safetensors>=0.6.2",
     "streamlit>=1.51.0",
     "torch>=2.6.0",
     "torchaudio>=2.6.0",
     "torchvision>=0.21.0",
     "tqdm>=4.67.1",
+    "transformers>=4.57.1",
     "uvicorn>=0.38.0",
 ]
