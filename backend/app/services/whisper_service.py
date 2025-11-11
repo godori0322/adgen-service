@@ -12,4 +12,6 @@ def transcribe_audio(file: UploadFile) -> str:
         files={"file": (file.filename, file.file, "audio/mpeg")},
         data={"model": "whisper-1"}
     )
+    if response.status_code != 200:
+        raise RuntimeError(f"Whisper API Error: {response.text}")
     return response.json()["text"]
