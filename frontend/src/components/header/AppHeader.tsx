@@ -13,7 +13,7 @@ export default function AppHeader() {
       </Link>
 
       <nav className="flex gap-4">
-        <Link to="/voice" className="text-gray-700 hover:text-blue-600">
+        <Link to="/" className="text-gray-700 hover:text-blue-600">
           음성 입력
         </Link>
         {/* 로그인 상태 */}

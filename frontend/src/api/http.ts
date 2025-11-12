@@ -1,6 +1,11 @@
 // src/api/http.ts
 
-const BASE_URL = import.meta.env.FAST_API_URL
+const BASE_URL = import.meta.env.VITE_FAST_API_URL + "/api";
+
+const authHeader = () => {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 export async function httpGet(url: string) {
   const res = await fetch(BASE_URL + url, {
@@ -22,6 +27,20 @@ export async function httpPost(url: string, body: any) {
     },
     body: JSON.stringify(body),
   });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function httpPostForm(url: string, form: FormData) {
+  const res = await fetch(BASE_URL + url, {
+    method: "POST",
+    headers: {},
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
   return res.json();
 }
 

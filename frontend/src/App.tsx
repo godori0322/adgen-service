@@ -22,7 +22,6 @@ function App() {
         <Route element={<MainLayout />}>
           {/* 로그인 없이 접근 가능 */}
           <Route path="/" element={<VoiceHomePage />} />
-          <Route path="/voice" element={<VoiceHomePage />} />
           {/* <Route path="/ad" element={<AdResultPage />} /> */}
 
           {/* 로그인 필요한 페이지 */}
