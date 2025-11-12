@@ -7,12 +7,13 @@ from io import BytesIO
 
 # ✅ 모델 로드 (최초 1회만)
 pipe = StableDiffusionXLPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-xl-base-1.0",
+    "runwayml/stable-diffusion-v1-5",
     torch_dtype=torch.float16,
     use_safetensors=True,
 ).to("cuda")
 
 pipe.enable_attention_slicing()
+pipe.enable_xformers_memory_efficient_attention()
 
 def generate_poster_image(prompt: str) -> bytes:
     print(f"[SDXL] generating image for prompt: {prompt}")
