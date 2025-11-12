@@ -1,3 +1,38 @@
+Metadata-Version: 2.4
+Name: adgen-service
+Version: 0.1.0
+Summary: 음성 기반 소상공인 마케팅 자동 생성 서비스
+Author-email: Team 4 <team4@example.com>
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.121.0
+Requires-Dist: uvicorn[standard]>=0.38.0
+Requires-Dist: python-multipart>=0.0.20
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: passlib[argon2]>=1.7.4
+Requires-Dist: python-jose[cryptography]>=3.3.0
+Requires-Dist: argon2-cffi>=23.1.0
+Requires-Dist: openai>=2.7.1
+Requires-Dist: torch>=2.6.0
+Requires-Dist: torchaudio>=2.6.0
+Requires-Dist: torchvision>=0.21.0
+Requires-Dist: langchain>=1.0.4
+Requires-Dist: numpy>=2.1.2
+Requires-Dist: pandas>=2.3.3
+Requires-Dist: python-dotenv>=1.2.1
+Requires-Dist: requests>=2.31.0
+Requires-Dist: tqdm>=4.67.1
+Requires-Dist: jupyter>=1.1.1
+Requires-Dist: ipykernel>=7.1.0
+Requires-Dist: matplotlib>=3.10.7
+Requires-Dist: streamlit>=1.51.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: httpx>=0.24.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+
 # Voice2Marketing - 음성 기반 소상공인 마케팅 자동 생성 서비스
 
 소상공인을 위한 AI 광고 생성 서비스

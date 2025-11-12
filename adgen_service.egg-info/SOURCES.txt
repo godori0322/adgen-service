@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+adgen_service.egg-info/PKG-INFO
+adgen_service.egg-info/SOURCES.txt
+adgen_service.egg-info/dependency_links.txt
+adgen_service.egg-info/requires.txt
+adgen_service.egg-info/top_level.txt
+backend/init_db.py
