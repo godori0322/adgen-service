@@ -44,6 +44,19 @@ export async function httpPostForm(url: string, form: FormData) {
   return res.json();
 }
 
+export async function httpPostImg(url: string, body: any) {
+  const res = await fetch(BASE_URL + url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: localStorage.getItem("token") ? `Bearer ${localStorage.getItem("token")}` : "",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.blob();
+}
+
 export async function httpPut(url: string, body: any) {
   const res = await fetch(BASE_URL + url, {
     method: "PUT",

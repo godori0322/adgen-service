@@ -8,12 +8,11 @@ interface GptParsed {
 
 export function formatChatResponse(parsed: GptParsed) {
   return `
-💡 ${parsed.idea}
+💡 아이디어: ${parsed.idea}
 
-📝 ${parsed.caption}
+📝 추천 캡션: ${parsed.caption}
 
-🏷️ ${parsed.hashtags?.join(" ") || "(해시태그 없음)"}
-
-🖼️ ${parsed.image_prompt || ""}
-  `.trim();
+🏷️ 해시태그 : ${parsed.hashtags?.join(" ") || "(해시태그 없음)"}
+  `;
+  // 🖼️ ${parsed.image_prompt || ""}
 }
