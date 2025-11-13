@@ -21,7 +21,7 @@ export default function VoiceHomePage() {
 
   return (
     <div className="relative pb-32">
-      <PageTitle>🎙️ 음성 기반 마케팅 생성</PageTitle>
+      <PageTitle variant="section">🎙️ 음성 기반 마케팅 생성</PageTitle>
       {/* 채팅 bubble 영역 */}
       <ChatBubbleList messages={messages} />
       <div ref={chatEndRef} />

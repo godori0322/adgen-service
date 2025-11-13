@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
 
-type User = { id: number; email: string; name?: string } | null;
+type User = { id: number; userId: string; name?: string } | null;
 
 interface AuthContextValue {
   user: User;

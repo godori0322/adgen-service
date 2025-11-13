@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import LoginPage from "./pages/auth/Login";
-// import SignupPage from "./pages/auth/Signup";
+import SignupPage from "./pages/auth/Signup";
 import VoiceHomePage from "./pages/home/VoiceHome";
 import MyPage from "./pages/mypage/MyPage";
 import PrivateRoute from "./router/PrivateRoute";
@@ -15,7 +15,7 @@ function App() {
         {/* 로그인/회원가입 */}
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
-          {/* <Route path="/signup" element={<SignupPage />} /> */}
+          <Route path="/signup" element={<SignupPage />} />
         </Route>
         {/* <Route path="/signup" element={<SignupPage />} /> */}
 

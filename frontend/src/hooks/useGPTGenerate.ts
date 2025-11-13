@@ -1,7 +1,7 @@
 import { generateMarketingRequest } from "../api/generate";
 
 
-export async function generateGptIdea(userText: string, context: string | null = null) {
+export async function useGptGenerate(userText: string, context: string | null = null) {
   const gptRes = await generateMarketingRequest(userText, context);
   try {
     return JSON.parse(gptRes.idea);

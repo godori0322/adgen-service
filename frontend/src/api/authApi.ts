@@ -2,33 +2,43 @@ import { httpPost } from "./http";
 
 
 const MOCK_USERS = [
-  { id:1, email: "test123@test.com", password: "abc123!", token: "dummy-token-abc", name: "Tester" },
-  { id:2, email: "admin@test.com", password: "admin123!", token: "dummy-token-admin", name: "Admin" },
+  { id:1, userId: "test123", password: "test123!", token: "dummy-token-abc", name: "Tester" },
+  { id:2, userId: "admin", password: "admin123!", token: "dummy-token-admin", name: "Admin" },
 ];
 
 
 export type LoginResult = {
   token: string;
-  user: { id: number; email: string; name?: string };
+  user: { id: number; userId: string; name?: string };
 };
 
 
-function mockLogin(email: string, password: string): Promise<LoginResult> {
+function mockLogin(userId: string, password: string): Promise<LoginResult> {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
-      const user = MOCK_USERS.find((u) => u.email === email && u.password === password);
+      const user = MOCK_USERS.find((u) => u.userId === userId && u.password === password);
       if (user) {
         // ✅ id 포함해서 반환
-        resolve({ token: user.token, user: { id: user.id, email: user.email, name: user.name } });
+        resolve({ token: user.token, user: { id: user.id, userId: user.userId, name: user.name } });
       } else {
-        reject(new Error("이메일 또는 비밀번호가 올바르지 않습니다."));
+        reject(new Error("아이디 또는 비밀번호가 올바르지 않습니다."));
       }
     }, 400);
   });
 }
 
 
-export async function loginRequest(email: string, password: string): Promise<LoginResult> {
-  // return httpPost("/auth/login", {email, password})
-  return mockLogin(email, password);
+export async function loginRequest(userId: string, password: string): Promise<LoginResult> {
+  // return httpPost("/auth/login", {userId, password})
+  return mockLogin(userId, password);
+}
+
+export async function registerUser(form: {
+  userId: string;
+  password: string;
+  name: string;
+  storeType: string;
+  address: string;
+}) {
+  return await httpPost("/auth/register", form);
 }
