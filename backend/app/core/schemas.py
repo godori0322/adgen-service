@@ -40,6 +40,9 @@ class GPTResponse(BaseResponse):
     hashtags: List[str] = Field(..., description="자동 생성된 해시태그 목록")
     image_prompt: str = Field(..., description="이미지 생성용 프롬프트")
 
+class AdGenerateResponse(GPTResponse):
+    image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
+
 class DiffusionRequest(BaseModel):
     prompt: str = Field(..., description="이미지 생성용 프롬프트")
 
