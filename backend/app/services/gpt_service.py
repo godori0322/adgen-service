@@ -56,6 +56,62 @@ def _safe_json_from_text(text: str) -> dict:
     except json.JSONDecodeError as e:
         raise ValueError(f"GPT 응답 JSON 파싱 실패: {e}. 원문: {text[:300]}...")  # 과도한 로그 방지 목적
 
+        
+       
+
+# ================== Multi-turn lanchain 대화 관리 함수 ==================
+def _get_or_create_chain(session_id: str):
+    """특정 session_id에 대한 langchain conversatiochain을 가져오거나 생성"""
+    if session_id not in CONVERSATION_MEMORIES:
+        # LangChain LLM 설정
+        llm = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0.7,
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
+
+        # 메모리 설정 (MAX_MEMORY_TURNS 만큼 기억)
+        memory = ConversationBufferWindowMemory(
+            k=MAX_MEMORY_TURNS,
+            memory_key="history"
+        )
+        
+        # 프롬프트 구성
+        prompt = PromptTemplate(
+            template=DIALOGUE_TEMPLATE,
+            input_variables=["input"], # history는 memory가 관리
+            partial_variables={"format_instructions": parser.get_format_instructions()},
+        )
+
+        # Conversation Chain 생성 및 저장
+        chain = ConversationChain(
+            llm=llm,
+            prompt=prompt,
+            memory=memory,
+            verbose=False 
+        )
+        # LLM, Memory, Pydantic Output Parser, Prompt Template 설정 후 Chain 생성
+        CONVERSATION_MEMORIES[session_id] = chain
+    return CONVERSATION_MEMORIES[session_id]
+
+def generate_conversation_response(session_id: str, user_input: str) -> DialogueGPTResponse:
+    """langchain 사용해서 multi-turn 대화 응답 생성"""
+    try:
+        chain = _get_or_create_chain(session_id)
+        # langchain 실행(메모리 자동 관리 & 프롬프트 주입)
+        raw_response = chain.invoke(input=user_input)['response'].strip()
+        # Pydantic 모델로 변환 & 유효성 검사
+        data = _safe_json_from_text(raw_response)
+        return DialogueGPTResponse(**data)
+
+    except Exception as e:
+        if session_id in CONVERSATION_MEMORIES:
+            del CONVERSATION_MEMORIES[session_id]
+        raise ValueError(f"LangChain 대화 응답 생성 실패: {e}")
+
+
+      
+# 단일 콘텐츠 생성
 def generate_marketing_idea(prompt_text: str, context=None) -> dict:
     """
     [기존 기능 유지] 단일 턴에서 마케팅 아이디어 생성하는 역할
@@ -79,6 +135,7 @@ def generate_marketing_idea(prompt_text: str, context=None) -> dict:
     - 맥락 정보: {context or '날씨, 업종, 분위기 등'}
 
     출력(JSON 오브젝트만, 추가 텍스트/코드블록 금지):
+    출력(JSON 형식으로만, ``json 블록 없이):
     {{
      "idea": "짧은 이벤트 아이디어 문장",
       "caption": "홍보용 문구(짧고 감성적인 문장)",
@@ -135,59 +192,62 @@ def generate_marketing_idea(prompt_text: str, context=None) -> dict:
         # 8) 최종 예외 단일화 및 상위 레이어 전달 역할
         raise ValueError(f"GPT 생성 실패: {e}")
 
+        
+    # 도시명 변환(정규화)
+    match = re.search(r"\{[\s\S]*\}", content)
+    if match:
+        json_str = match.group()
+    else:
+        json_str = content
 
+    try:
+        result = json.loads(json_str)
+    except json.JSONDecodeError:
+        result = {"idea": content, "caption": content, "hashtags": [], "image_prompt": ""}
+    return result
 
-# ================== Multi-turn lanchain 대화 관리 함수 ==================
-def _get_or_create_chain(session_id: str):
-    """특정 session_id에 대한 langchain conversatiochain을 가져오거나 생성"""
-    if session_id not in CONVERSATION_MEMORIES:
-        # LangChain LLM 설정
-        llm = ChatOpenAI(
-            model="gpt-4o-mini", 
-            temperature=0.6,
-            openai_api_key=os.getenv("OPENAI_API_KEY")
-        )
-
-        # 메모리 설정 (MAX_MEMORY_TURNS 만큼 기억)
-        memory = ConversationBufferWindowMemory(
-            k=MAX_MEMORY_TURNS,
-            memory_key="history"
+def extract_city_name_english(location: str) -> str:
+    """
+    한글 지역명을 GPT를 사용하여 영어 도시명으로 변환
+    예: "서울 강남구" -> "Seoul"
+        "부산광역시 해운대구" -> "Busan"
+    """
+    import re
+    
+    # 이미 영어인 경우 그대로 반환
+    if re.match(r'^[a-zA-Z\s]+$', location):
+        return location.split()[0]  # 첫 단어만 반환
+    
+    # 위치 정보가 없으면 기본값
+    if not location or location.strip() == "":
+        return "Seoul"
+    
+    try:
+        prompt = f"""
+        다음 한국어 지역명을 날씨 API에서 사용할 수 있는 영어 도시명으로 변환해줘.
+        도시명만 간단하게 반환하고, 추가 설명은 하지 마('서울 강남구' -> 'Seoul' 처럼).
+        
+        입력: {location}
+        출력 형식: 영어 도시명 (예: Seoul, Busan, Incheon)
+        """
+        
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,  # 낮은 temperature로 일관된 결과
+            max_tokens=20     # 짧은 응답만 필요
         )
         
-        # 프롬프트 구성
-        prompt = PromptTemplate(
-            template=DIALOGUE_TEMPLATE,
-            input_variables=["input"], # history는 memory가 관리
-            partial_variables={"format_instructions": parser.get_format_instructions()},
-        )
-
-        # Conversation Chain 생성 및 저장
-        chain = ConversationChain(
-            llm=llm,
-            prompt=prompt,
-            memory=memory,
-            verbose=False 
-        )
-        # LLM, Memory, Pydantic Output Parser, Prompt Template 설정 후 Chain 생성
-        CONVERSATION_MEMORIES[session_id] = chain
-    return CONVERSATION_MEMORIES[session_id]
-
-def generate_conversation_response(session_id: str, user_input: str) -> DialogueGPTResponse:
-    """langchain 사용해서 multi-turn 대화 응답 생성"""
-    try:
-        chain = _get_or_create_chain(session_id)
-        # langchain 실행(메모리 자동 관리 & 프롬프트 주입)
-        raw_response = chain.invoke(input=user_input)['response'].strip()
-        # Pydantic 모델로 변환 & 유효성 검사
-        data = _safe_json_from_text(raw_response)
-        return DialogueGPTResponse(**data)
-
+        city_name = res.choices[0].message.content.strip()
+        
+        # 결과 검증 (영어만 포함되어야 함)
+        if re.match(r'^[a-zA-Z\s-]+$', city_name):
+            # 여러 단어가 있으면 첫 번째 단어만 (예: "Seoul City" -> "Seoul")
+            return city_name.split()[0]
+        else:
+            # 예상치 못한 형식이면 기본값
+            return "Seoul"
+            
     except Exception as e:
-        if session_id in CONVERSATION_MEMORIES:
-            del CONVERSATION_MEMORIES[session_id]
-        raise ValueError(f"LangChain 대화 응답 생성 실패: {e}")
-
-
-
-
-
+        print(f"[지역명 변환 오류]: {e}")
+        return "Seoul"  # 실패 시 기본값
