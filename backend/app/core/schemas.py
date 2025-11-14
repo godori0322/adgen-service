@@ -40,6 +40,9 @@ class GPTResponse(BaseResponse):
     hashtags: List[str] = Field(..., description="자동 생성된 해시태그 목록")
     image_prompt: str = Field(..., description="이미지 생성용 프롬프트")
 
+class AdGenerateResponse(GPTResponse):
+    image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
+
 class DiffusionRequest(BaseModel):
     prompt: str = Field(..., description="이미지 생성용 프롬프트")
 
@@ -114,3 +117,20 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     """토큰 페이로드 데이터"""
     username: Optional[str] = None
+
+# ==================== 광고 요청 관련 스키마 ====================
+
+class AdRequestResponse(BaseModel):
+    """광고 요청 처리 정보 응답"""
+    id: int
+    user_id: Optional[int]
+    voice_text: Optional[str]
+    weather_info: Optional[str]
+    gpt_output_text: Optional[str]
+    diffusion_prompt: Optional[str]
+    image_url: Optional[str]
+    hashtags: Optional[str]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

@@ -2,3 +2,10 @@
 .venv/
 # API 키
 .env
+
+python-version
+INSTALL.md
+README.md
+requirements.txt
+server.log
+.env.example

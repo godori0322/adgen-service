@@ -102,3 +102,22 @@ def update_user_profile(db: Session, user_id: int, update_data: dict) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+def get_user_from_token(db: Session, token: Optional[str]) -> Optional[User]:
+    """
+    토큰으로부터 사용자 조회 (선택적)
+    - 토큰이 유효하면 사용자 정보 반환
+    - 토큰이 없거나 유효하지 않으면 None 반환
+    """
+    if token is None:
+        return None
+    
+    try:
+        token_data = decode_access_token(token)
+        if token_data is None or token_data.username is None:
+            return None
+        
+        user = get_user_by_username(db, username=token_data.username)
+        return user
+    except:
+        return None
