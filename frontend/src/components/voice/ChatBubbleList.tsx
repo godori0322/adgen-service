@@ -1,5 +1,3 @@
-
-
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -7,6 +5,13 @@ interface ChatMessage {
 }
 
 export default function ChatBubbleList({ messages }: { messages: ChatMessage[] }) {
+  const downloadImage = (base64Url: string, filename: string) => {
+    const link = document.createElement("a");
+    link.href = base64Url;
+    link.download = filename;
+    link.click();
+  };
+
   return (
     <div className="mt-4 space-y-3">
       {messages.map((msg, idx) => (
@@ -20,7 +25,17 @@ export default function ChatBubbleList({ messages }: { messages: ChatMessage[] }
             }`}
         >
           <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre>
-          {msg.img && <img src={msg.img} alt="생성된 이미지" className="rounded-lg mt-2" />}
+          {msg.img && (
+            <div className="mt-3 flex flex-col items-start">
+              <img src={msg.img} alt="생성된 이미지" className="rounded-lg" />
+              <button
+                onClick={() => downloadImage(msg.img!, `adgen-image-${Date.now()}.png`)}
+                className="mt-2 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md shadow hover:bg-blue-700 transition"
+              >
+                이미지 저장 ⬇️
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>
