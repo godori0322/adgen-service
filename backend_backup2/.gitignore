@@ -1,0 +1,32 @@
+# 가상환경
+.venv/
+# API 키
+.env
+
+# --- 캐시 및 컴파일 파일 ---
+
+# Python 캐시/컴파일
+__pycache__/
+*.pyc
+*.pyd
+*.so
+.pytest_cache/
+
+
+# IDE/OS 관련 캐시 및 설정 파일
+.vscode/        # VS Code 설정 (공유하지 않을 경우)
+.idea/          # JetBrains IDE 설정
+*.swp           # Vim 스왑 파일
+
+# OS 생성 파일
+.DS_Store       # macOS
+Thumbs.db       # Windows
+
+# 특정 프레임워크 캐시 폴더 (만약 있다면)
+backend/app/cache/
+backend/app/tmp/
+backend/app/__pycache__
+backend/app/*.pyc
+backend/app/*.pyd
+backend/app/*.so
+backend/app/.pytest_cache/

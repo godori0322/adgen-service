@@ -10,6 +10,30 @@ venv/
 
 # API 키
 .env
+# 캐시
+__pycache__//
+__pycache__/
+__pycache__
+
+# 로그 파일
+*.log
+# 데이터베이스 파일
+*.db
+# 배포 파일
+dist/
+build/
+*.egg-info/
+# IDE 설정 파일
+.vscode/
+.idea/
+# 시스템 파일
+.DS_Store
+Thumbs.db
+# 기타
+*.bak
+*.tmp
+*.swp
+*.swo
 
 # 데이터베이스
 *.db
