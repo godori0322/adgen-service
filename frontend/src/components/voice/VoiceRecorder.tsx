@@ -13,19 +13,19 @@ export default function VoiceRecorder({ onAudioSend }: { onAudioSend: (b: Blob) 
       }}
       render={({ startRecording, stopRecording, status }) => (
         <div className="flex flex-col items-center gap-3">
-          {/* ✅ 녹음 완료 후 재생 UI */}
-          {status !== "recording" && audioURL && (
+          {/* 녹음 완료 후 재생 UI */}
+          {/* {status !== "recording" && audioURL && (
             <div className="w-full flex flex-col items-center gap-2">
               <audio src={audioURL} controls className="w-72 rounded-lg shadow-sm" />
             </div>
-          )}
+          )} */}
 
-          {/* ✅ 상태 표시 */}
+          {/* 태 표시 */}
           <p className="text-sm text-gray-600 h-4">
             {status === "recording" ? "🎙️ 녹음 중..." : audioURL ? "" : "대기 중"}
           </p>
 
-          {/* ✅ 녹음 버튼 UI */}
+          {/* 녹음 버튼 UI */}
           <div className="flex items-center justify-center">
             {status !== "recording" && (
               <button
