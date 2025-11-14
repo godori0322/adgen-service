@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import PageTitle from "../../components/common/PageTitle";
+import { useEffect, useRef } from "react";
+import { PageTitle } from "../../components/common/Title";
+import ChatBubbleList from "../../components/voice/ChatBubbleList";
 import VoiceRecorder from "../../components/voice/VoiceRecorder";
 import { useVoiceChat } from "../../hooks/useVoiceChat";
-import ChatBubbleList from "../../components/voice/ChatBubbleList";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -11,13 +11,12 @@ interface ChatMessage {
 }
 
 export default function VoiceHomePage() {
-  const {messages, onAudioSend} = useVoiceChat();
+  const { messages, onAudioSend } = useVoiceChat();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
 
   return (
     <div className="relative pb-32">

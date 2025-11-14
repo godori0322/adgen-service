@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginRequest } from "../../api/authApi";
-import { useAuth } from "../../context/AuthContext";
-import TextInput from "../../components/common/TextInput";
 import Button from "../../components/common/Button";
-import PageTitle from "../../components/common/PageTitle";
+import TextInput from "../../components/common/TextInput";
+import { PageTitle } from "../../components/common/Title";
 import Toast from "../../components/common/Toast";
-
+import { useAuth } from "../../context/AuthContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -50,7 +49,6 @@ export default function LoginPage() {
     if (formError) setFormError(null);
   };
 
-
   const onBlurPassword = () => {
     if (!touched.password) setTouched((t) => ({ ...t, password: true }));
     setPwErr(validatePassword(password));
@@ -79,7 +77,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-
 
   return (
     <>

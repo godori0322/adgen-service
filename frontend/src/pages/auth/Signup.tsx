@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Button from "../../components/common/Button";
-import PageTitle from "../../components/common/PageTitle";
 import TextInput from "../../components/common/TextInput";
+import { PageTitle } from "../../components/common/Title";
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -21,7 +21,6 @@ export default function SignupPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     setForm((prev) => ({ ...prev, [id]: value }));
-
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +65,7 @@ export default function SignupPage() {
             value={form.password}
             onChange={handleChange}
           />
-          
+
           <TextInput
             id="name"
             label="이름"
