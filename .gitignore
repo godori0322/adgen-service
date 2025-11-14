@@ -9,3 +9,4 @@ README.md
 requirements.txt
 server.log
 .env.example
+outputs/
