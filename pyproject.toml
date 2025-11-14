@@ -1,28 +1,73 @@
 [project]
 name = "adgen-service"
 version = "0.1.0"
+description = "음성 기반 소상공인 마케팅 자동 생성 서비스"
+readme = "README.md"
 requires-python = ">=3.10"
+authors = [
+    {name = "Team 4", email = "team4@example.com"}
+]
+
 dependencies = [
-    "accelerate>=1.11.0",
-    "diffusers>=0.35.2",
+    # Web Framework
     "fastapi>=0.121.0",
-    "ipykernel>=7.1.0",
-    "jupyter>=1.1.1",
-    "langchain>=1.0.4",
-    "matplotlib>=3.10.7",
-    "numpy>=2.1.2",
-    "openai>=2.7.1",
-    "pandas>=2.3.3",
-    "pillow>=11.3.0",
-    "python-dotenv>=1.2.1",
+    "uvicorn[standard]>=0.38.0",
     "python-multipart>=0.0.20",
+    # Database & ORM
+    "sqlalchemy>=2.0.0",
+    # Authentication & Security
+    "passlib[argon2]>=1.7.4",
+    "python-jose[cryptography]>=3.3.0",
+    "argon2-cffi>=23.1.0",
+    # AI & ML
+    "openai>=2.7.1",
     "safetensors>=0.6.2",
     "streamlit>=1.51.0",
     "torch>=2.6.0",
     "torchaudio>=2.6.0",
     "torchvision>=0.21.0",
+    "diffusers>=0.30.0",
+    "transformers>=4.44.0",
+    "accelerate>=0.34.0",
+    "langchain>=1.0.4",
+    # Data Processing
+    "numpy>=2.1.2",
+    "pandas>=2.3.3",
+    # Utilities
+    "python-dotenv>=1.2.1",
+    "requests>=2.31.0",
     "tqdm>=4.67.1",
+    # Development & Notebook
+    "jupyter>=1.1.1",
+    "ipykernel>=7.1.0",
+    "matplotlib>=3.10.7",
+    # Frontend (optional)
+    "streamlit>=1.51.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.24.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
     "transformers>=4.57.1",
     "uvicorn>=0.38.0",
     "xformers>=0.0.32.post2",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["backend"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

@@ -1,6 +1,3 @@
-# diffusion_service.py
-# 입력받은 프롬프트를 바탕으로 홍보용 이미지 출력
-
 import threading
 import torch
 from diffusers import StableDiffusionPipeline
