@@ -8,7 +8,8 @@ interface TextInputProps {
   placeholder?: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBlur?: () => void;
-  error?: string| null;
+  error?: string | null;
+  size?: "normal" | "small";
 }
 
 export default function TextInput({
@@ -20,7 +21,9 @@ export default function TextInput({
   onChange,
   onBlur,
   error,
+  size = "normal",
 }: TextInputProps) {
+  const sizeClass = size === "small" ? "px-3 py-2 text-sm" : "px-4 py-3 text-base";
   return (
     <div className="mb-3">
       <label htmlFor={id} className="block text-sm font-medium text-gray-600 mb-1">
@@ -38,6 +41,7 @@ export default function TextInput({
         aria-describedby={`${id}-error`}
         className={`
                 w-full px-4 py-3 rounded-lg border
+                ${sizeClass} 
                 ${
                   error
                     ? "border-red-500 focus:ring-red-400"
@@ -51,7 +55,7 @@ export default function TextInput({
           {error}
         </p>
       ) : (
-        <p className="mt-1 text-xs min-h-[20px]">&nbsp;</p> 
+        <p className="mt-1 text-xs min-h-[20px]">&nbsp;</p>
       )}
     </div>
   );
