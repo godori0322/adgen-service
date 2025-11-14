@@ -1,5 +1,4 @@
 import { useState } from "react";
-import TextInput from "../../components/common/TextInput";
 import { PageTitle, SectionTitle } from "../../components/common/Title";
 import ProfileRow from "../../components/myPage/ProfileRow";
 
