@@ -21,17 +21,17 @@ export default function LoginPage() {
     }
   }, [location.state]);
   // 상태관리
-  const [userId, setUserId] = useState("");
+  const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   // 에러상태 관리
-  const [userIdErr, setUserIdErr] = useState<string | null>(null);
+  const [userNameErr, setUserNameErr] = useState<string | null>(null);
   const [pwErr, setPwErr] = useState<string | null>(null);
-  const [touched, setTouched] = useState({ userId: false, password: false });
+  const [touched, setTouched] = useState({ userName: false, password: false });
   const [formError, setFormError] = useState<string | null>(null);
 
-  const validateUserId = (v: string) => {
+  const validateUserName = (v: string) => {
     if (!v) return "아이디를 입력해주세요.";
     return null;
   };
@@ -59,20 +59,20 @@ export default function LoginPage() {
     e?.preventDefault();
 
     // 최종 검증
-    const eErr = validateUserId(userId);
+    const eErr = validateUserName(userName);
     const pErr = validatePassword(password);
-    setUserIdErr(eErr);
+    setUserNameErr(eErr);
     setPwErr(pErr);
 
     if (eErr || pErr) return;
 
     setLoading(true);
     try {
-      const data = await loginRequest(userId, password);
-      login(data.token, data.user);
+      const data = await loginRequest(userName, password);
+      login(data.token);
       navigate("/");
     } catch (err: any) {
-      setFormError(err?.message ?? "로그인 실패");
+      setFormError("아이디 또는 비밀번호를 확인해주세요.");
     } finally {
       setLoading(false);
     }
@@ -87,14 +87,14 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} noValidate>
           {/* 이메일 입력 */}
           <TextInput
-            id="userId"
+            id="userName"
             label="아이디"
-            type="userId"
-            value={userId}
-            placeholder="userId"
-            onChange={(e) => setUserId(e.target.value)}
-            onBlur={() => setUserIdErr(validateUserId(userId))}
-            error={userIdErr}
+            type="userName"
+            value={userName}
+            placeholder="userName"
+            onChange={(e) => setUserName(e.target.value)}
+            onBlur={() => setUserNameErr(validateUserName(userName))}
+            error={userNameErr}
           />
 
           {/* 비밀번호 입력 */}
@@ -114,7 +114,7 @@ export default function LoginPage() {
             type="submit"
             text="로그인"
             loading={loading}
-            disabled={loading || !userId || !password || !!userIdErr || !!pwErr}
+            disabled={loading || !userName || !password || !!userNameErr || !!pwErr}
           />
           <div className="min-h-5 mt-2">
             {formError && (

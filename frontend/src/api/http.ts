@@ -31,6 +31,22 @@ export async function httpPost(url: string, body: any) {
   return res.json();
 }
 
+export async function httpPostUrlEncoded(url: string, params: Record<string, string>) {
+  const form = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => form.append(k, v));
+
+  const res = await fetch(BASE_URL + url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form,
+  });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 export async function httpPostForm(url: string, form: FormData) {
   const res = await fetch(BASE_URL + url, {
     method: "POST",
