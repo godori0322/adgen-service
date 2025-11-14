@@ -1,4 +1,4 @@
-import { whisperTranscribeRequest } from "../api/whisper";
+import { whisperTranscribeRequest } from "../api/generate";
 
 export async function useWhisper(audioBlob: Blob) {
   const mime = audioBlob.type || "audio/webm";

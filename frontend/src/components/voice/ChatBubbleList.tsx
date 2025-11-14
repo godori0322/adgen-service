@@ -3,6 +3,7 @@
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  img?: string;
 }
 
 export default function ChatBubbleList({ messages }: { messages: ChatMessage[] }) {
@@ -18,7 +19,8 @@ export default function ChatBubbleList({ messages }: { messages: ChatMessage[] }
                 : "mr-auto bg-gray-200 text-gray-900 rounded-bl-none"
             }`}
         >
-          {msg.content}
+          <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre>
+          {msg.img && <img src={msg.img} alt="생성된 이미지" className="rounded-lg mt-2" />}
         </div>
       ))}
     </div>
