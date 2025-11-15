@@ -27,10 +27,21 @@ export async function httpPost(url: string, body: any) {
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let errorMessage = `HTTP ${res.status}`;
+
+    try {
+      const errorData = await res.json();
+      if (errorData?.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = '오류가 발생했습니다.'
+    }
+    throw new Error(errorMessage);
+  }
   return res.json();
 }
-
 export async function httpPostUrlEncoded(url: string, params: Record<string, string>) {
   const form = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => form.append(k, v));
