@@ -91,7 +91,7 @@ export default function LoginPage() {
             label="아이디"
             type="userName"
             value={userName}
-            placeholder="userName"
+            placeholder="아이디"
             onChange={(e) => setUserName(e.target.value)}
             onBlur={() => setUserNameErr(validateUserName(userName))}
             error={userNameErr}
