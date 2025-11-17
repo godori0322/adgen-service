@@ -23,7 +23,9 @@ parser = PydanticOutputParser(pydantic_object=DialogueGPTResponse)
 # Multi-turn 대화 관리 및 다음 질문 생성 역할 : 대화 목표, 응답 형식 지시
 DIALOGUE_TEMPLATE = """
 너는 소상공인 마케팅 도우미 역할을 한다.
-너의 목표는 사용자로부터 '업종', '홍보 목적', '메뉴/제품명', '원하는 분위기', '특별한 행사/이벤트' 정보를 수집하고, 수집이 완료되면 최종 콘텐츠를 생성하는 것이다.
+너의 목표는 '업종', '홍보 목적', '메뉴/제품명', '원하는 분위기', '특별한 행사/이벤트' 정보를 수집하고, 수집이 완료되면 최종 콘텐츠를 생성하는 것이다.
+
+{user_info}
 
 현재 대화 기록:
 {history}
@@ -60,9 +62,25 @@ def _safe_json_from_text(text: str) -> dict:
        
 
 # ================== Multi-turn lanchain 대화 관리 함수 ==================
-def _get_or_create_chain(session_id: str):
+def _get_or_create_chain(session_id: str, user_context: dict = None):
     """특정 session_id에 대한 langchain conversatiochain을 가져오거나 생성"""
     if session_id not in CONVERSATION_MEMORIES:
+        # 사용자 정보를 프롬프트에 반영
+        user_info = ""
+        if user_context:
+            info_parts = []
+            if user_context.get("business_type"):
+                info_parts.append(f"업종: {user_context['business_type']} (이미 알고 있음, 다시 묻지 마)")
+            if user_context.get("location"):
+                info_parts.append(f"위치: {user_context['location']}")
+            if user_context.get("menu_items"):
+                info_parts.append(f"메뉴/제품: {user_context['menu_items']} (이미 알고 있음, 다시 묻지 마)")
+            if user_context.get("business_hours"):
+                info_parts.append(f"영업시간: {user_context['business_hours']}")
+            
+            if info_parts:
+                user_info = "사용자 정보 (이미 알고 있는 정보, 다시 묻지 말 것):\n" + "\n".join(info_parts)
+        
         # LangChain LLM 설정
         llm = ChatOpenAI(
             model="gpt-4o-mini", 
@@ -80,7 +98,10 @@ def _get_or_create_chain(session_id: str):
         prompt = PromptTemplate(
             template=DIALOGUE_TEMPLATE,
             input_variables=["input"], # history는 memory가 관리
-            partial_variables={"format_instructions": parser.get_format_instructions()},
+            partial_variables={
+                "format_instructions": parser.get_format_instructions(),
+                "user_info": user_info if user_info else "사용자 정보 없음 (모든 정보를 질문해야 함)"
+            },
         )
 
         # Conversation Chain 생성 및 저장
@@ -94,10 +115,10 @@ def _get_or_create_chain(session_id: str):
         CONVERSATION_MEMORIES[session_id] = chain
     return CONVERSATION_MEMORIES[session_id]
 
-def generate_conversation_response(session_id: str, user_input: str) -> DialogueGPTResponse:
+def generate_conversation_response(session_id: str, user_input: str, user_context: dict = None) -> DialogueGPTResponse:
     """langchain 사용해서 multi-turn 대화 응답 생성"""
     try:
-        chain = _get_or_create_chain(session_id)
+        chain = _get_or_create_chain(session_id, user_context)
         # langchain 실행(메모리 자동 관리 & 프롬프트 주입)
         raw_response = chain.invoke(input=user_input)['response'].strip()
         # Pydantic 모델로 변환 & 유효성 검사
