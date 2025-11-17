@@ -34,6 +34,7 @@ async def generate_ad(
         current_user = auth_service.get_user_from_token(db, token)
         
         # Context 생성 (로그인 여부에 따라 다름)
+        weather_info = None  # 기본값 설정
         if current_user:
             # 로그인한 경우: 사용자 정보 활용
             weather_info = get_weather(current_user.location or "Seoul")
