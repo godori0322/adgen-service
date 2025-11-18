@@ -119,5 +119,5 @@ def get_user_from_token(db: Session, token: Optional[str]) -> Optional[User]:
         
         user = get_user_by_username(db, username=token_data.username)
         return user
-    except:
+    except Exception:
         return None

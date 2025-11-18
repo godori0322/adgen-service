@@ -2,8 +2,8 @@ import { httpPost, httpPostUrlEncoded } from "./http";
 
 
 export type LoginResult = {
-  token: string;
-  user: { id: number; username: string; };
+  access_token: string;
+  token_type: string;
 };
 
 

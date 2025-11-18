@@ -11,6 +11,7 @@ from backend.app.core.database import get_db
 from backend.app.core.models import User, AdRequest
 from backend.app.services import auth_service
 from typing import Optional
+from datetime import datetime
 import base64
 import json
 
@@ -33,7 +34,11 @@ async def generate_ad(
         token = credentials.credentials if credentials else None
         current_user = auth_service.get_user_from_token(db, token)
         
+        # 현재 날짜 및 시간 정보 가져오기
+        current_datetime = datetime.now().strftime("%Y년 %m월 %d일 %H시")
+        
         # Context 생성 (로그인 여부에 따라 다름)
+        weather_info = None  # 기본값 설정
         if current_user:
             # 로그인한 경우: 사용자 정보 활용
             weather_info = get_weather(current_user.location or "Seoul")
@@ -55,11 +60,12 @@ async def generate_ad(
 메뉴/서비스: {menu_items_str}
 영업시간: {business_hours}
 날씨: {weather_info}
+현재 날짜 및 시간: {current_datetime}
             """.strip()
             print(f"[사용자 정보 포함] {current_user.username}")
         else:
-            # 비로그인 경우: 기본 정보만 사용
-            context = None
+            # 비로그인 경우: 기본 정보 및 날짜/시간 제공
+            context = f"현재 날짜 및 시간: {current_datetime}"
             print(f"[비로그인 사용자]")
 
         # GPT 프롬프트 생성 및 실행

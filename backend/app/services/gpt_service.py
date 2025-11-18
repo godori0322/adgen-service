@@ -5,6 +5,8 @@
 import os
 import json
 import re  # 정규식 사용 목적
+from typing import Optional, Dict
+from datetime import datetime
 from openai import OpenAI
 from langchain_openai import ChatOpenAI
 from langchain_classic.chains import ConversationChain
@@ -16,14 +18,18 @@ from backend.app.core.schemas import DialogueGPTResponse, FinalContentSchema
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # langchain 변수 정의
-CONVERSATION_MEMORIES = {}  # session_id -> ConversationChain 매핑
 MAX_MEMORY_TURNS = 5
 parser = PydanticOutputParser(pydantic_object=DialogueGPTResponse)
+
+# 사용자별 대화 세션 저장 (user_id -> {chain, last_access})
+CONVERSATION_MEMORIES: Dict[str, Dict] = {}
 
 # Multi-turn 대화 관리 및 다음 질문 생성 역할 : 대화 목표, 응답 형식 지시
 DIALOGUE_TEMPLATE = """
 너는 소상공인 마케팅 도우미 역할을 한다.
-너의 목표는 사용자로부터 '업종', '홍보 목적', '메뉴/제품명', '원하는 분위기', '특별한 행사/이벤트' 정보를 수집하고, 수집이 완료되면 최종 콘텐츠를 생성하는 것이다.
+너의 목표는 '업종', '홍보 목적', '메뉴/제품명', '원하는 분위기', '특별한 행사/이벤트' 정보를 수집하고, 수집이 완료되면 최종 콘텐츠를 생성하는 것이다.
+
+{user_info}
 
 현재 대화 기록:
 {history}
@@ -59,54 +65,133 @@ def _safe_json_from_text(text: str) -> dict:
         
        
 
-# ================== Multi-turn lanchain 대화 관리 함수 ==================
-def _get_or_create_chain(session_id: str):
-    """특정 session_id에 대한 langchain conversatiochain을 가져오거나 생성"""
-    if session_id not in CONVERSATION_MEMORIES:
-        # LangChain LLM 설정
-        llm = ChatOpenAI(
-            model="gpt-4o-mini", 
-            temperature=0.7,
-            openai_api_key=os.getenv("OPENAI_API_KEY")
-        )
+# ================== Multi-turn langchain 대화 관리 함수 ==================
+def _get_or_create_chain(user_id: Optional[int], user_context: dict = None) -> ConversationChain:
+    """
+    사용자별로 대화 체인 유지 (user_context 캐싱)
+    
+    - 비로그인 사용자(user_id=None): 매번 새 체인 생성
+    - 로그인 사용자: 기존 체인 재사용 (user_context도 세션에 저장)
+    """
+    # 비로그인 사용자는 매번 새 체인
+    if user_id is None:
+        return _create_new_chain(user_context)
+    
+    # 로그인 사용자는 기존 체인 재사용
+    session_key = f"user-{user_id}"
+    
+    if session_key not in CONVERSATION_MEMORIES:
+        # 첫 대화: 새 체인 생성 및 컨텍스트 캐싱
+        chain = _create_new_chain(user_context)
+        CONVERSATION_MEMORIES[session_key] = {
+            "chain": chain,
+            "user_context": user_context,  # 컨텍스트 캐싱
+            "last_access": datetime.now()
+        }
+        print(f"✅ 새 대화 세션 생성 (컨텍스트 캐싱): {session_key}")
+    else:
+        # 기존 대화: 저장된 체인 재사용
+        CONVERSATION_MEMORIES[session_key]["last_access"] = datetime.now()
+        print(f"♻️  기존 대화 세션 재사용 (DB 쿼리 스킵): {session_key}")
+    
+    return CONVERSATION_MEMORIES[session_key]["chain"]
 
-        # 메모리 설정 (MAX_MEMORY_TURNS 만큼 기억)
-        memory = ConversationBufferWindowMemory(
-            k=MAX_MEMORY_TURNS,
-            memory_key="history"
-        )
+
+def _create_new_chain(user_context: dict = None) -> ConversationChain:
+    """새 LangChain ConversationChain 생성"""
+    # 사용자 정보를 프롬프트에 반영
+    user_info = ""
+    if user_context:
+        info_parts = []
         
-        # 프롬프트 구성
-        prompt = PromptTemplate(
-            template=DIALOGUE_TEMPLATE,
-            input_variables=["input"], # history는 memory가 관리
-            partial_variables={"format_instructions": parser.get_format_instructions()},
-        )
+        # 사용자 프로필 정보
+        if user_context.get("business_type"):
+            info_parts.append(f"업종: {user_context['business_type']} (이미 알고 있음, 다시 묻지 마)")
+        if user_context.get("location"):
+            info_parts.append(f"위치: {user_context['location']}")
+        if user_context.get("menu_items"):
+            info_parts.append(f"메뉴/제품: {user_context['menu_items']} (이미 알고 있음, 다시 묻지 마)")
+        if user_context.get("business_hours"):
+            info_parts.append(f"영업시간: {user_context['business_hours']}")
+        
+        # 장기 메모리 추가
+        if user_context.get("memory"):
+            info_parts.append(f"\n=== 이전 대화에서 파악한 정보 ===\n{user_context['memory']}")
+        
+        if info_parts:
+            user_info = "사용자 정보 (이미 알고 있는 정보, 다시 묻지 말 것):\n" + "\n".join(info_parts)
+    
+    # LangChain LLM 설정
+    llm = ChatOpenAI(
+        model="gpt-4o-mini", 
+        temperature=0.7,
+        openai_api_key=os.getenv("OPENAI_API_KEY")
+    )
 
-        # Conversation Chain 생성 및 저장
-        chain = ConversationChain(
-            llm=llm,
-            prompt=prompt,
-            memory=memory,
-            verbose=False 
-        )
-        # LLM, Memory, Pydantic Output Parser, Prompt Template 설정 후 Chain 생성
-        CONVERSATION_MEMORIES[session_id] = chain
-    return CONVERSATION_MEMORIES[session_id]
+    # 메모리 설정 (MAX_MEMORY_TURNS 만큼 기억)
+    memory = ConversationBufferWindowMemory(
+        k=MAX_MEMORY_TURNS,
+        memory_key="history"
+    )
+    
+    # 프롬프트 구성
+    prompt = PromptTemplate(
+        template=DIALOGUE_TEMPLATE,
+        input_variables=["input"], # history는 memory가 관리
+        partial_variables={
+            "format_instructions": parser.get_format_instructions(),
+            "user_info": user_info if user_info else "사용자 정보 없음 (모든 정보를 질문해야 함)"
+        },
+    )
 
-def generate_conversation_response(session_id: str, user_input: str) -> DialogueGPTResponse:
-    """langchain 사용해서 multi-turn 대화 응답 생성"""
+    # Conversation Chain 생성
+    chain = ConversationChain(
+        llm=llm,
+        prompt=prompt,
+        memory=memory,
+        verbose=False 
+    )
+    
+    return chain
+
+
+def generate_conversation_response(
+    user_input: str,
+    user_id: Optional[int] = None,
+    user_context: dict = None
+) -> DialogueGPTResponse:
+    """
+    langchain 사용해서 multi-turn 대화 응답 생성
+    
+    Args:
+        user_input: 사용자 입력
+        user_id: 사용자 ID (로그인한 경우)
+        user_context: 사용자 프로필 및 장기 메모리
+    
+    Returns:
+        DialogueGPTResponse: 다음 질문 또는 최종 콘텐츠
+    """
     try:
-        chain = _get_or_create_chain(session_id)
+        # 사용자별 체인 가져오기 (또는 생성)
+        chain = _get_or_create_chain(user_id, user_context)
+        
         # langchain 실행(메모리 자동 관리 & 프롬프트 주입)
         raw_response = chain.invoke(input=user_input)['response'].strip()
+        
         # Pydantic 모델로 변환 & 유효성 검사
         data = _safe_json_from_text(raw_response)
-        return DialogueGPTResponse(**data)
+        response = DialogueGPTResponse(**data)
+        
+        # 대화 완료 시 세션 정리 (로그인 사용자만)
+        if response.is_complete and user_id:
+            session_key = f"user-{user_id}"
+            if session_key in CONVERSATION_MEMORIES:
+                del CONVERSATION_MEMORIES[session_key]
+                print(f"🗑️  대화 완료, 세션 삭제 (체인 + 캐싱된 컨텍스트): {session_key}")
+        
+        return response
 
     except Exception as e:
-        if session_id in CONVERSATION_MEMORIES:
-            del CONVERSATION_MEMORIES[session_id]
         raise ValueError(f"LangChain 대화 응답 생성 실패: {e}")
 
 
@@ -123,6 +208,8 @@ def generate_marketing_idea(prompt_text: str, context=None) -> dict:
     # 1) 시스템 지시문 구성 역할
     system = (
         "너는 소상공인 마케팅 도우미 역할. "
+        "현재 날짜와 계절 및 시간을 고려하여 적절한 마케팅 콘텐츠를 생성해야 함. "
+        "예: 11월이면 가을/겨울 이벤트, 5월이면 봄 이벤트를 제안. "
         "항상 JSON 오브젝트만 출력. 코드블록/설명/추가 문장 금지."
     )
 
