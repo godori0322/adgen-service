@@ -26,3 +26,6 @@ Thumbs.db
 *.tmp
 *.swp
 *.swo
+# 백업 파일
+backend_backup/
+backend_backup_*/
