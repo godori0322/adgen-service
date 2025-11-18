@@ -43,6 +43,9 @@ class GPTResponse(BaseResponse):
     hashtags: List[str] = Field(..., description="자동 생성된 해시태그 목록")
     image_prompt: str = Field(..., description="이미지 생성용 프롬프트")
 
+class AdGenerateResponse(GPTResponse):
+    image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
+
 class DiffusionRequest(BaseModel):
     prompt: str = Field(..., description="이미지 생성용 프롬프트")
 
@@ -85,3 +88,75 @@ class DialogueResponse(BaseResponse):
     next_question: Optional[str] = Field(None, description="다음 질문 텍스트")
     final_content: Optional[FinalContentSchema] = Field(None, description= "최종 콘텐츠")
     session_id: str = Field(..., description="현재 대화 세션을 식별하는 ID")
+
+# ==================== 인증 관련 스키마 ====================
+
+class UserCreate(BaseModel):
+    """사용자 회원가입 요청"""
+    username: str = Field(..., min_length=3, max_length=50, description="사용자 아이디")
+    email: str = Field(..., description="이메일")
+    password: str = Field(..., min_length=6, description="비밀번호")
+    business_type: Optional[str] = Field(None, description="업종 (ex: 카페, 음식점, 미용실)")
+    location: Optional[str] = Field(None, description="가게 위치")
+    menu_items: Optional[List[str]] = Field(None, description="메뉴 목록")
+    business_hours: Optional[str] = Field(None, description="영업시간")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "username": "cafe_owner",
+                "email": "owner@example.com",
+                "password": "securepass123",
+                "business_type": "카페",
+                "location": "서울 강남구",
+                "menu_items": ["아메리카노", "라떼", "케이크"],
+                "business_hours": "09:00-22:00"
+            }
+        }
+
+class UserUpdate(BaseModel):
+    """사용자 정보 수정"""
+    business_type: Optional[str] = None
+    location: Optional[str] = None
+    menu_items: Optional[List[str]] = None
+    business_hours: Optional[str] = None
+
+class UserProfile(BaseModel):
+    """사용자 프로필 응답"""
+    id: int
+    username: str
+    email: str
+    business_type: Optional[str]
+    location: Optional[str]
+    menu_items: Optional[str]
+    business_hours: Optional[str]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class Token(BaseModel):
+    """JWT 토큰 응답"""
+    access_token: str
+    token_type: str = "bearer"
+
+class TokenData(BaseModel):
+    """토큰 페이로드 데이터"""
+    username: Optional[str] = None
+
+# ==================== 광고 요청 관련 스키마 ====================
+
+class AdRequestResponse(BaseModel):
+    """광고 요청 처리 정보 응답"""
+    id: int
+    user_id: Optional[int]
+    voice_text: Optional[str]
+    weather_info: Optional[str]
+    gpt_output_text: Optional[str]
+    diffusion_prompt: Optional[str]
+    image_url: Optional[str]
+    hashtags: Optional[str]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
