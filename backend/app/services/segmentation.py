@@ -43,6 +43,33 @@ class MobileSAMSegmentation:
 
         return mask, cutout
 
+# 이미지 전처리
+def preprocess_for_sam(img_rgb):
+    img = img_rgb.copy()
+
+    # L 채널(명도) 대비 향상(LAB: RGB보다 밝기에 초점을 둔 색 공간)
+    lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
+    l, a, b = cv2.split(lab)
+
+    # CLAHE(Contrast Limited Adaptive Histogram Equalization) 전처리
+    # 국소 대비 향상을 위한 알고리즘 -> 대비 강화, 노이즈 제거
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l2 = clahe.apply(l)
+
+    lab = cv2.merge((l2, a, b))
+    img = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+
+    # Gamma Correction(조명 보정)
+    gamma = 1.1
+    img = np.power(img / 255.0, gamma)
+    img = np.uint8(img * 255)
+
+    # Sharpening(경계 강화)
+    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    img = cv2.filter2D(img, -1, kernel)
+
+    return img
+
 # MobileSAM의 AutoMaskGenerator는 "제품:1, 배경:0" 마스킹이 항상 보장 X
 # 조명이 강하거나 제품과 배경 구분이 명확하지 않은 경우 mask 반전 위험 있음
 # 제품과 배경의 평균 색상 비교, mask polarity 자동 판별
