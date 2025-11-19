@@ -80,6 +80,7 @@ class DialogueGPTResponse(BaseModel):
     is_complete: bool = Field(..., description="정보 수집 완료 여부. True면 대화 종료.")
     next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
     final_content: Optional[FinalContentSchema] = Field(None, description="수집 완료 후 GPT가 생성한 최종 콘텐츠")
+    conversation_history: Optional[List[dict]] = Field(None, description="대화 완료 시 전체 대화 기록 (메모리 업데이트용)")
 
 # 클라이언트에게 전달될 최종 응답 스키마 (dialog.py 에서 사용)
 class DialogueResponse(BaseResponse):

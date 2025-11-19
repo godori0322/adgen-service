@@ -35,8 +35,7 @@ def get_user_memory(db: Session, user_id: int) -> Optional[str]:
 def update_user_memory(
     db: Session, 
     user_id: int, 
-    conversation_summary: str,
-    new_insights: dict
+    conversation_summary: str
 ) -> UserMemory:
     """
     GPT를 활용하여 기존 메모리 + 새로운 대화 내용을 통합
@@ -44,8 +43,7 @@ def update_user_memory(
     Args:
         db: 데이터베이스 세션
         user_id: 사용자 ID
-        conversation_summary: 이번 대화 요약
-        new_insights: 추출된 새로운 정보 (dict)
+        conversation_summary: 이번 대화 요약 (대화 기록 + 최종 콘텐츠 포함)
     
     Returns:
         업데이트된 UserMemory 객체
@@ -60,8 +58,7 @@ def update_user_memory(
     # 2. GPT에게 메모리 업데이트 요청
     updated_memory_text = _merge_memory_with_gpt(
         existing_memory=existing_text,
-        conversation_summary=conversation_summary,
-        new_insights=new_insights
+        conversation_summary=conversation_summary
     )
     
     # 3. 임베딩 생성
@@ -88,8 +85,7 @@ def update_user_memory(
 
 def _merge_memory_with_gpt(
     existing_memory: str,
-    conversation_summary: str,
-    new_insights: dict
+    conversation_summary: str
 ) -> str:
     """GPT를 활용하여 기존 메모리와 새 정보를 통합"""
     
@@ -114,9 +110,6 @@ def _merge_memory_with_gpt(
 ### 새로운 대화 요약:
 {conversation_summary}
 
-### 추출된 새 정보:
-{json.dumps(new_insights, ensure_ascii=False, indent=2)}
-
 ### 업데이트된 메모리 (중복 없이, 자연스럽게):
 """.strip()
     
@@ -140,18 +133,38 @@ def _merge_memory_with_gpt(
             return conversation_summary
 
 
-def create_conversation_summary(final_content: dict) -> str:
-    """최종 콘텐츠에서 대화 요약 생성 (간단한 텍스트)"""
+def create_conversation_summary(final_content: dict, conversation_history: list = None) -> str:
+    """대화 기록과 최종 콘텐츠에서 대화 요약 생성
+    
+    Args:
+        final_content: 최종 생성된 마케팅 콘텐츠
+        conversation_history: 전체 대화 기록 (Q&A 흐름)
+    
+    Returns:
+        대화 요약 텍스트
+    """
+    
+    # 대화 기록이 있으면 포함
+    conversation_text = ""
+    if conversation_history:
+        conversation_lines = []
+        for msg in conversation_history:
+            role = "사용자" if msg["role"] == "user" else "AI"
+            conversation_lines.append(f"{role}: {msg['content'][:100]}...")  # 길이 제한
+        conversation_text = "\n".join(conversation_lines)
+    
+    # 대화 흐름 섹션 생성 (f-string 외부에서)
+    conversation_section = f"대화 흐름:\n{conversation_text}\n\n" if conversation_text else ""
     
     prompt = f"""
 우리가 제공하는 서비스는 소상공인을 위한 사용자 맞춤형 마케팅 서비스입니다.(생성형 AI로 광고이미지와 문구를 생성해서 사용자에게 제공합니다.)
 
-다음 마케팅 콘텐츠 생성 결과를 간단히 요약하세요:
+다음 대화 과정과 마케팅 콘텐츠 생성 결과를 요약하세요:
 
-최종 생성물:
+{conversation_section}최종 생성물:
 {json.dumps(final_content, ensure_ascii=False)}
 
-요약 (한 문단, 핵심만):
+요약 (한 문단, 사용자의 선호도와 요구사항 및 앞으로 마케팅에 도움될만한 내용 중심으로):
 """.strip()
     
     try:
@@ -170,17 +183,4 @@ def create_conversation_summary(final_content: dict) -> str:
         return f"사용자가 {final_content.get('idea', '마케팅 콘텐츠')}를 요청했습니다."
 
 
-def extract_insights_from_final_content(final_content: dict) -> dict:
-    """최종 콘텐츠에서 핵심 정보 추출"""
-    insights = {}
-    
-    if "idea" in final_content:
-        insights["generated_idea"] = final_content["idea"]
-    
-    if "caption" in final_content:
-        insights["caption_style"] = final_content["caption"]
-    
-    if "hashtags" in final_content and final_content["hashtags"]:
-        insights["preferred_hashtags"] = final_content["hashtags"][:5]  # 상위 5개만
-    
-    return insights
+

@@ -99,23 +99,19 @@ async def handle_marketing_dialog(
         # 5. 대화 완료 시 메모리 업데이트 (로그인 사용자만)
         if response.is_complete and response.final_content and current_user:
             try:
-                # 대화 요약 (최종 콘텐츠 기반)
+                # 대화 요약 (대화 기록 + 최종 콘텐츠 기반)
                 summary = memory_service.create_conversation_summary(
-                    final_content=response.final_content.dict()
+                    final_content=response.final_content.dict(),
+                    conversation_history=response.conversation_history
                 )
                 
-                # 추출된 정보
-                insights = memory_service.extract_insights_from_final_content(
-                    response.final_content.dict()
-                )
-                
-                # 장기 메모리 업데이트
+                # 장기 메모리 업데이트 (단순화: summary만 전달)
                 memory_service.update_user_memory(
                     db=db,
                     user_id=current_user.id,
-                    conversation_summary=summary,
-                    new_insights=insights
+                    conversation_summary=summary
                 )
+                print(f"✅ 장기 메모리 업데이트 완료 (대화 기록 포함)")
                 
             except Exception as mem_err:
                 print(f"⚠️ 메모리 업데이트 실패 (비치명적): {mem_err}")

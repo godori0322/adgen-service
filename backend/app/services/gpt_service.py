@@ -182,10 +182,26 @@ def generate_conversation_response(
         data = _safe_json_from_text(raw_response)
         response = DialogueGPTResponse(**data)
         
-        # 대화 완료 시 세션 정리 (로그인 사용자만)
+        # 대화 완료 시: 세션 삭제 전 대화 기록 추출 (로그인 사용자만)
         if response.is_complete and user_id:
             session_key = f"user-{user_id}"
             if session_key in CONVERSATION_MEMORIES:
+                # 세션 삭제 전 대화 기록 추출
+                chain = CONVERSATION_MEMORIES[session_key]["chain"]
+                messages = chain.memory.chat_memory.messages
+                
+                # LangChain 메시지를 dict 형식으로 변환
+                conversation_history = [
+                    {
+                        "role": "user" if msg.type == "human" else "assistant",
+                        "content": msg.content
+                    }
+                    for msg in messages
+                ]
+                response.conversation_history = conversation_history
+                print(f"📝 대화 기록 추출 완료: {len(conversation_history)}개 메시지")
+                
+                # 세션 삭제
                 del CONVERSATION_MEMORIES[session_key]
                 print(f"🗑️  대화 완료, 세션 삭제 (체인 + 캐싱된 컨텍스트): {session_key}")
         
