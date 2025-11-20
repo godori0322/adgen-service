@@ -4,12 +4,6 @@ import ChatBubbleList from "../../components/voice/ChatBubbleList";
 import VoiceRecorder from "../../components/voice/VoiceRecorder";
 import { useVoiceChat } from "../../hooks/useVoiceChat";
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  tempId?: number; // 임시 메시지 식별용
-}
-
 export default function VoiceHomePage() {
   const { messages, onAudioSend } = useVoiceChat();
   const chatEndRef = useRef<HTMLDivElement>(null);

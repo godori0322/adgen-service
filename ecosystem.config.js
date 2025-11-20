@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "backend",
       script: "uvicorn",
-      args: "backend.app.main:app --host 0.0.0.0 --port 8500",
+      args: "backend.app.main:app --host 0.0.0.0 --port 8080",
       interpreter: "none",
       cwd: "./backend",
     },
