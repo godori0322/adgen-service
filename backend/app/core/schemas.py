@@ -63,6 +63,20 @@ class DiffusionControlRequest(BaseModel):
     # IP-Adapter 강도 (스타일 주입)
     ip_adapter_scale: Optional[float] = Field(0.7, ge=0.0, le=1.0, description="IP-Adapter 스타일 주입 강도. 0.7 권장.")
 
+# 누끼 추출부터 배경 합성까지 한 번에 처리하는 요청 스키마
+class DiffusionAutoRequest(BaseModel):
+    prompt: Optional[str] = Field(
+        "A cinematic, studio-lit product hero shot on a clean background",
+        description="배경/분위기에 대한 텍스트 프롬프트 (미입력 시 기본값 사용)",
+    )
+    product_image_b64: str = Field(..., description="사용자가 업로드한 원본 제품 이미지(Base64)")
+    control_weight: Optional[float] = Field(
+        1.0, ge=0.0, le=2.0, description="ControlNet (Depth) 제어 강도. 1.0 권장."
+    )
+    ip_adapter_scale: Optional[float] = Field(
+        0.7, ge=0.0, le=1.0, description="IP-Adapter 스타일 주입 강도. 0.7 권장."
+    )
+
 # 최종 이미지 반환
 class DiffusionControlResponse(BaseModel):
     image_b64: str = Field(..., description="배경 합성 및 Control이 완료된 최종 이미지 (Base64)")

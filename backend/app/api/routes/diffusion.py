@@ -1,14 +1,38 @@
 import base64
 from io import BytesIO
-from fastapi import APIRouter, HTTPException, Body
+import io
+from typing import Optional
+import numpy as np
+from fastapi import APIRouter, HTTPException, Body, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from PIL import Image
 
 from backend.app.services.diffusion_service import synthesize_image
+from backend.app.services.segmentation import MobileSAMSegmentation
 # 스키마 Import 경로와 이름을 사용자가 제공한 내용에 맞춰 수정
 # 경로는 'backend.app.core.schemas'에 있다고 가정하고, 스키마 이름은 'DiffusionControlRequest/Response' 사용
-from backend.app.core.schemas import DiffusionControlRequest, DiffusionControlResponse 
+from backend.app.core.schemas import DiffusionControlRequest, DiffusionControlResponse, DiffusionAutoRequest 
 
 router = APIRouter(prefix="/diffusion", tags=["Diffusion"])
+
+# ------------------------------------------------------------------------------
+# 전역 세그멘테이션 모델 (lazy load)
+# ------------------------------------------------------------------------------
+_segmentation_model: Optional[MobileSAMSegmentation] = None
+
+def _get_segmentation_model() -> MobileSAMSegmentation:
+    global _segmentation_model
+    if _segmentation_model is None:
+        try:
+            _segmentation_model = MobileSAMSegmentation(
+                model_type="vit_t",
+                checkpoint_path="backend/weights/mobile_sam.pt",
+            )
+            print("[Segmentation] MobileSAM 로드 완료.")
+        except Exception as exc:
+            print(f"[Segmentation][ERROR] 모델 로드 실패: {exc}")
+            raise HTTPException(status_code=500, detail="Segmentation model load failed.")
+    return _segmentation_model
 
 # ==============================================================================
 # 유틸리티 함수 (Base64 변환은 API 경계에서 처리)
@@ -35,6 +59,31 @@ def _image_to_base64(image: Image.Image) -> str:
     # JPEG보다 PNG가 손실이 적고, 투명도 지원이 용이합니다.
     image.save(buffered, format="PNG") 
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+def _mask_array_to_pil(mask_array: np.ndarray) -> Image.Image:
+    """SAM이 반환한 마스크(ndarray)를 '흑백 L' 모드 PIL 이미지로 변환."""
+    scaled = np.clip(mask_array * 255.0, 0, 255).astype("uint8")
+    return Image.fromarray(scaled, mode="L")
+
+
+def _run_auto_synthesis(
+    original_image: Image.Image,
+    prompt: str,
+    control_weight: float,
+    ip_adapter_scale: float,
+) -> Image.Image:
+    """세그멘테이션 → 합성까지 실행하고 최종 이미지를 PIL로 반환."""
+    model = _get_segmentation_model()
+    mask_array, cutout_image = model.remove_background(original_image)
+    mask_image = _mask_array_to_pil(mask_array)
+
+    return synthesize_image(
+        prompt=prompt,
+        original_image=cutout_image,
+        mask_image=mask_image,
+        control_weight=control_weight,
+        ip_adapter_scale=ip_adapter_scale,
+    )
 
 # ==============================================================================
 # API 라우트
@@ -79,4 +128,93 @@ async def diffusion_synthesize(request_body: DiffusionControlRequest = Body(...)
     except Exception as e:
         print(f"[FATAL] An unexpected error occurred: {e}")
         # 오류가 발생해도 응답 스키마의 기본 필드를 채워서 반환
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/synthesize/auto", response_model=DiffusionControlResponse)
+async def diffusion_synthesize_auto(request_body: DiffusionAutoRequest = Body(...)):
+    """
+    제품 이미지만 받아서
+    1) SAM으로 누끼/마스크 추출
+    2) 추출된 마스크와 컷아웃을 이용해 배경 합성까지 한 번에 처리
+    """
+    print("[API] Received auto synthesis request.")
+
+    try:
+        original_image = _base64_to_image(request_body.product_image_b64)
+        if original_image is None:
+            raise ValueError("Product image is missing or invalid.")
+
+        final_image_pil = _run_auto_synthesis(
+            original_image=original_image,
+            prompt=request_body.prompt or "",
+            control_weight=request_body.control_weight,
+            ip_adapter_scale=request_body.ip_adapter_scale,
+        )
+        final_image_b64 = _image_to_base64(final_image_pil)
+        print("[API] Auto synthesis successful. Returning Base64 image.")
+
+        return DiffusionControlResponse(
+            image_b64=final_image_b64,
+            status="success",  # type: ignore[arg-type]
+            message="Image synthesis successful.",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[FATAL][AUTO] An unexpected error occurred: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/synthesize/auto/upload",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"image/png": {}},
+            "description": "누끼+배경 합성된 최종 PNG 이미지",
+        }
+    },
+)
+async def diffusion_synthesize_auto_upload(
+    file: UploadFile = File(...),
+    prompt: str = Form(
+        "A cinematic, studio-lit product hero shot on a clean background"
+    ),
+    control_weight: float = Form(1.0),
+    ip_adapter_scale: float = Form(0.7),
+):
+    """
+    segmentation_test.py와 동일하게 파일 업로드를 받아
+    누끼+배경 합성을 한 번에 처리하는 엔드포인트.
+    """
+    print("[API] Received auto synthesis upload request.")
+    try:
+        original_image = Image.open(file.file).convert("RGB")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image upload.")
+
+    try:
+        final_image_pil = _run_auto_synthesis(
+            original_image=original_image,
+            prompt=prompt or "",
+            control_weight=control_weight,
+            ip_adapter_scale=ip_adapter_scale,
+        )
+        print("[API] Auto synthesis (upload) successful. Returning PNG image.")
+
+        buf = io.BytesIO()
+        final_image_pil.save(buf, format="PNG")
+        buf.seek(0)
+
+        # Swagger에서 이미지로 바로 미리보기 하도록 StreamingResponse 사용
+        return StreamingResponse(
+            buf,
+            media_type="image/png",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[FATAL][AUTO][UPLOAD] An unexpected error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
