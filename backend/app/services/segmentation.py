@@ -22,19 +22,36 @@ class MobileSAMSegmentation:
         # PIL -> numpy 변환(RGB)
         img_rgb = np.array(image.convert("RGB"))
 
-        # 자동 마스크 제네레이터
-        masks = self.mask_generator.generate(img_rgb)
+        # SAM 친화적 전처리 이미지
+        pre_img = preprocess_for_sam(img_rgb)
 
-        # 가장 큰 마스크(제품) 1개 선택
+        # 자동 마스크 제네레이터
+        masks = self.mask_generator.generate(pre_img)
+
         if len(masks) == 0:
             raise ValueError("No Mask found by SAM")
-    
-        masks_sorted = sorted(masks, key=lambda x: x["area"], reverse=True)
-        mask = masks_sorted[0]["segmentation"].astype(np.uint8)
+        
+        H, W, _ = pre_img.shape
 
+        # 마스크 후보들 중 중앙에 가장 가까운 마스크 선택
+        # 전체 픽셀의 1% 미만 크기의 마스크는 노이즈 처리
+        area_threshold = 0.01 * H * W
+        large_masks = [m for m in masks if m["area"] >= area_threshold]
+
+        if not large_masks:
+            large_masks = masks
+
+        # 상위 k개 중 중앙에 가장 가까운 마스크 선택
+        large_masks = sorted(large_masks, key=lambda x:x["area"], reverse=True)
+        top_k = large_masks[: min(3, len(large_masks))]
+        best_mask_dict = choose_most_centered_mask(top_k, H, W)
+        mask = best_mask_dict["segmentation"].astype(np.uint8)
+
+        # polarity 보정
         if mask_needs_invert(img_rgb, mask):
             mask = 1 - mask
 
+        # 경계 완화
         mask = refine_mask(mask)
 
         # 누끼 따기 위한 RGB -> RGBA 이미지 생성
@@ -69,6 +86,26 @@ def preprocess_for_sam(img_rgb):
     img = cv2.filter2D(img, -1, kernel)
 
     return img
+
+# 여러 마스크 후보 중 이미지 중앙에 가장 가까운 마스크 선택
+def choose_most_centered_mask(masks, H, W):
+    center = np.array([H / 2, W / 2])
+    best = None
+    best_dist = float("inf")
+
+    for m in masks:
+        seg = m["segmentation"]
+        ys, xs = np.where(seg)
+        if len(xs) == 0:
+            continue
+        cy = np.mean(ys)
+        cx = np.mean(xs)
+        dist = np.linalg.norm(np.array([cy, cx] - center))
+        if dist < best_dist:
+            best_dist = dist
+            best = m
+
+    return best if best is not None else masks[0]
 
 # MobileSAM의 AutoMaskGenerator는 "제품:1, 배경:0" 마스킹이 항상 보장 X
 # 조명이 강하거나 제품과 배경 구분이 명확하지 않은 경우 mask 반전 위험 있음
