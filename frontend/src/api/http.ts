@@ -39,7 +39,6 @@ export async function httpPost(url: string, body: any) {
     }
     throw new Error(errorMessage);
   }
-
   return res.json();
 }
 

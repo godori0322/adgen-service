@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { generateRequest } from "../api/generate";
+import { generateDialogue, generateDiffusion } from "../api/generate";
 import { formatChatResponse } from "../utils/chatFormatter";
 import { useDotsAnimation } from "./useDotsAnimation";
 import { useWhisper } from "./useWhisper";
@@ -36,34 +36,61 @@ export function useVoiceChat() {
       setMessages((prev) =>
         prev.map((m) => (m.tempId === userTempId ? { ...m, content: userText } : m))
       );
+      
+      // 이미지 + generate
       const assistantTempId = Date.now() + 1;
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: ".", tempId: assistantTempId },
       ]);
-      
-      // 이미지 + generate
       startDots(assistantTempId);
-      const adRes = await generateRequest(userText);
-      const formatted = formatChatResponse(adRes);
-      const imgSrc = `data:image/png;base64,${adRes.image_base64}`;
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.tempId === assistantTempId ? { ...m, content: formatted, img: imgSrc } : m
-        )
-      );
+
+      // 멀티턴 대화 모드
+      const adRes = await generateDialogue(userText);
       stopDots();
+      if (!adRes.is_complete) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.tempId === assistantTempId ? { ...m, content: adRes.next_question } : m
+          )
+        );
+        return;
+      }
+      const formatted = formatChatResponse(adRes.final_content);
+      setMessages((prev) =>
+        prev.map((m) => (m.tempId === assistantTempId ? { ...m, content: formatted } : m))
+      );
+      if (adRes.final_content.image_prompt) {
+        console.log(adRes.final_content.image_prompt);
+        const imgTempId = Date.now() + 2;
+
+        // 이미지 생성 중 메시지 추가
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "🖼️ 이미지 생성 중입니다...", tempId: imgTempId },
+        ]);
+
+        const imgSrc = await generateDiffusion(adRes.final_content.image_prompt);
+
+        // 이미지 채우기
+        setMessages((prev) =>
+          prev.map((m) => (m.tempId === imgTempId ? { ...m, content: "", img: imgSrc } : m))
+        );
+      }
     } catch (err: any) {
       console.error("오류:", err.message);
+      const content = `❌ 오류 발생가 발생하였습니다. 다시 시도 부탁드립니다.`; 
       setMessages((prev) => {
         if (prev.length === 0) {
-          return [{ role: "assistant", content: `❌ 오류 발생: ${err.message}` }];
+          return [{ role: "assistant", content }];
         }
 
         const lastIndex = prev.length - 1;
 
         return prev.map((m, idx) =>
-          idx === lastIndex ? { ...m, content: `❌ 오류 발생: ${err.message}` } : m
+          idx === lastIndex
+            ? { ...m, content }
+            : m
         );
       });
       stopDots();
