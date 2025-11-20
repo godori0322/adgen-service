@@ -2,17 +2,18 @@
 
 const BASE_URL = import.meta.env.VITE_FAST_API_URL + "/api";
 
-const authHeader = () => {
+const authHeader = (): Record<string, string> => {
   const token = localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
+
 
 export async function httpGet(url: string) {
   const res = await fetch(BASE_URL + url, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      Authorization: localStorage.getItem("token") ? `Bearer ${localStorage.getItem("token")}` : "",
+      ...authHeader(),
     },
   });
   return res.json();
@@ -23,25 +24,24 @@ export async function httpPost(url: string, body: any) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: localStorage.getItem("token") ? `Bearer ${localStorage.getItem("token")}` : "",
+      ...authHeader(),
     },
     body: JSON.stringify(body),
   });
+
   if (!res.ok) {
     let errorMessage = `HTTP ${res.status}`;
-
     try {
       const errorData = await res.json();
-      if (errorData?.detail) {
-        errorMessage = errorData.detail;
-      }
+      if (errorData?.detail) errorMessage = errorData.detail;
     } catch {
-      errorMessage = '오류가 발생했습니다.'
+      errorMessage = "오류가 발생했습니다.";
     }
     throw new Error(errorMessage);
   }
   return res.json();
 }
+
 export async function httpPostUrlEncoded(url: string, params: Record<string, string>) {
   const form = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => form.append(k, v));
@@ -50,6 +50,7 @@ export async function httpPostUrlEncoded(url: string, params: Record<string, str
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
+      ...authHeader(),
     },
     body: form,
   });
@@ -61,9 +62,12 @@ export async function httpPostUrlEncoded(url: string, params: Record<string, str
 export async function httpPostForm(url: string, form: FormData) {
   const res = await fetch(BASE_URL + url, {
     method: "POST",
-    headers: {},
+    headers: {
+      ...authHeader(),
+    },
     body: form,
   });
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`HTTP ${res.status}: ${text}`);
@@ -76,10 +80,11 @@ export async function httpPostImg(url: string, body: any) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: localStorage.getItem("token") ? `Bearer ${localStorage.getItem("token")}` : "",
+      ...authHeader(),
     },
     body: JSON.stringify(body),
   });
+
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.blob();
 }
@@ -89,7 +94,7 @@ export async function httpPut(url: string, body: any) {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
+      ...authHeader(),
     },
     body: JSON.stringify(body),
   });
@@ -101,7 +106,7 @@ export async function httpDelete(url: string) {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
+      ...authHeader(),
     },
   });
   return res.json();
