@@ -7,6 +7,7 @@ import json
 import re  # 정규식 사용 목적
 from typing import Optional, Dict
 from datetime import datetime
+from enum import Enum
 from openai import OpenAI
 from langchain_openai import ChatOpenAI
 from langchain_classic.chains import ConversationChain
@@ -17,28 +18,176 @@ from backend.app.core.schemas import DialogueGPTResponse, FinalContentSchema
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# ================== 대화 의도 분류 ==================
+
+class ConversationIntent(str, Enum):
+    """대화 의도 분류"""
+    PROFILE_BUILDING = "profile_building"  # 첫 대화: 마케팅 전략 정보 수집
+    INFO_UPDATE = "info_update"  # 정보 업데이트
+    AD_GENERATION = "ad_generation"  # 광고 생성
+    ANALYSIS = "analysis"  # 분석/조언
+
+
+def classify_user_intent(user_input: str, has_complete_profile: bool) -> ConversationIntent:
+    """
+    사용자 입력의 의도를 분류
+    
+    Args:
+        user_input: 사용자 입력 텍스트
+        has_complete_profile: 프로필이 완성되었는지 여부
+        
+    Returns:
+        ConversationIntent
+    """
+    
+    # 첫 대화는 무조건 프로필 수집
+    if not has_complete_profile:
+        return ConversationIntent.PROFILE_BUILDING
+    
+    # 빠른 키워드 매칭
+    user_input_lower = user_input.lower()
+    
+    # 광고 생성 관련 키워드
+    ad_keywords = ['광고', '이미지', '포스터', '홍보', '배너', '만들어', '생성', '디자인', '아이디어']
+    if any(keyword in user_input_lower for keyword in ad_keywords):
+        return ConversationIntent.AD_GENERATION
+    
+    # 정보 업데이트 관련 키워드
+    update_keywords = ['요즘', '요새', '최근', '지금', '바뀌', '변경', '늘었', '줄었', '많아', '적어', '달라', '다르']
+    if any(keyword in user_input_lower for keyword in update_keywords):
+        return ConversationIntent.INFO_UPDATE
+    
+    # 분석 관련 키워드
+    analysis_keywords = ['왜', '이유', '분석', '어떻게', '추천', '조언', '도움']
+    if any(keyword in user_input_lower for keyword in analysis_keywords):
+        return ConversationIntent.ANALYSIS
+    
+    # 기본값: 광고 생성
+    return ConversationIntent.AD_GENERATION
+
 # langchain 변수 정의
-MAX_MEMORY_TURNS = 5
+MAX_MEMORY_TURNS = 10
 parser = PydanticOutputParser(pydantic_object=DialogueGPTResponse)
 
 # 사용자별 대화 세션 저장 (user_id -> {chain, last_access})
 CONVERSATION_MEMORIES: Dict[str, Dict] = {}
 
-# Multi-turn 대화 관리 및 다음 질문 생성 역할 : 대화 목표, 응답 형식 지시
-DIALOGUE_TEMPLATE = """
-너는 소상공인 마케팅 도우미 역할을 한다.
-너의 목표는 '업종', '홍보 목적', '메뉴/제품명', '원하는 분위기', '특별한 행사/이벤트' 정보를 수집하고, 수집이 완료되면 최종 콘텐츠를 생성하는 것이다.
+# ================== 프롬프트 템플릿들 ==================
 
-{user_info}
+# 1️⃣ 마케팅 전략 정보 수집 프롬프트 (첫 대화 전용)
+PROFILE_BUILDING_TEMPLATE = """
+당신은 소상공인 전담 마케팅 전문가입니다.
 
-현재 대화 기록:
+=== 사업자 기본 정보 (이미 알고 있는 정보) ===
+업종: {business_type}
+위치: {location}
+주력 상품: {menu_items}
+영업시간: {business_hours}
+
+=== 현재 수집된 마케팅 전략 정보 ===
+{existing_strategy}
+
+=== 대화 목표 ===
+이번이 첫 대화이므로, 효과적인 마케팅을 위해 다음 핵심 정보를 자연스럽게 수집하세요:
+
+1. **타겟 고객** (연령대, 성별, 직업, 특성)
+   - 예: "주로 어떤 고객층이 많이 방문하시나요?"
+   
+2. **차별화 포인트** (경쟁업체 대비 강점)
+   - 예: "주변 카페들과 비교했을 때 특별한 강점이 있으신가요?"
+   
+3. **브랜드 컨셉** (추구하는 이미지, 분위기)
+   - 예: "어떤 분위기나 이미지를 추구하시나요?"
+   
+4. **마케팅 목표** (신규 고객 유치? 재방문 증대? 매출 증가?)
+   - 예: "현재 가장 개선하고 싶은 부분이 있으신가요?"
+
+=== 중요 규칙 ===
+- 한 번에 하나씩만 질문하세요 (여러 질문 동시 금지)
+- 자연스럽고 친근한 대화 톤 유지
+- 사용자가 답변하기 쉽게 예시나 선택지 제공
+- 위 4가지 정보 수집 완료 시 is_complete=true 설정
+- 기본 정보(업종, 위치, 메뉴 등)는 절대 다시 묻지 마세요
+
+=== 현재 대화 ===
 {history}
 
-사용자의 새로운 입력에 대해 다음 JSON 형식으로 응답해야 한다.
+사용자: {input}
+
+다음 JSON 형식으로 응답:
 {format_instructions}
+"""
+
+# 2️⃣ 정보 업데이트 프롬프트 (틀만)
+INFO_UPDATE_TEMPLATE = """
+당신은 소상공인 전담 마케팅 전문가입니다.
+
+=== 사업자 정보 ===
+업종: {business_type} | 위치: {location}
+주력 상품: {menu_items}
+
+=== 현재 마케팅 전략 정보 ===
+{existing_strategy}
+
+=== 대화 목표 ===
+사용자가 제공한 새로운 정보를 반영하여 마케팅 전략 정보를 업데이트하세요.
+(이 프롬프트는 향후 구현 예정)
+
+=== 현재 대화 ===
+{history}
 
 사용자: {input}
-AI 응답:
+
+다음 JSON 형식으로 응답:
+{format_instructions}
+"""
+
+# 3️⃣ 광고 생성 프롬프트 (틀만)
+AD_GENERATION_TEMPLATE = """
+당신은 소상공인 전담 마케팅 전문가입니다.
+
+=== 사업자 정보 ===
+업종: {business_type} | 위치: {location}
+주력 상품: {menu_items}
+
+=== 마케팅 전략 정보 ===
+{existing_strategy}
+
+=== 대화 목표 ===
+사용자가 원하는 광고/마케팅 콘텐츠를 생성하세요.
+(이 프롬프트는 향후 구현 예정)
+
+=== 현재 대화 ===
+{history}
+
+사용자: {input}
+
+다음 JSON 형식으로 응답:
+{format_instructions}
+"""
+
+# 4️⃣ 분석/조언 프롬프트 (틀만)
+ANALYSIS_TEMPLATE = """
+당신은 소상공인 전담 마케팅 전문가입니다.
+
+=== 사업자 정보 ===
+업종: {business_type} | 위치: {location}
+주력 상품: {menu_items}
+
+=== 마케팅 전략 정보 ===
+{existing_strategy}
+
+=== 대화 목표 ===
+사용자의 질문에 대해 전문적인 분석과 조언을 제공하세요.
+(이 프롬프트는 향후 구현 예정)
+
+=== 현재 대화 ===
+{history}
+
+사용자: {input}
+
+다음 JSON 형식으로 응답:
+{format_instructions}
 """
 
 
@@ -66,69 +215,132 @@ def _safe_json_from_text(text: str) -> dict:
        
 
 # ================== Multi-turn langchain 대화 관리 함수 ==================
-def _get_or_create_chain(user_id: Optional[int], user_context: dict = None) -> ConversationChain:
+def _get_or_create_chain(
+    user_id: Optional[int], 
+    user_context: dict = None,
+    first_input: str = None
+) -> tuple:
     """
-    사용자별로 대화 체인 유지 (user_context 캐싱)
+    사용자별로 대화 체인 유지 + 첫 문장 의도 분류
     
-    - 비로그인 사용자(user_id=None): 매번 새 체인 생성
-    - 로그인 사용자: 기존 체인 재사용 (user_context도 세션에 저장)
+    Args:
+        user_id: 사용자 ID
+        user_context: 사용자 컨텍스트 (첫 요청에만 제공)
+        first_input: 첫 문장 (의도 분류용, 새 세션에만 제공)
+        
+    Returns:
+        (chain, context) tuple
     """
     # 비로그인 사용자는 매번 새 체인
     if user_id is None:
-        return _create_new_chain(user_context)
+        chain = _create_new_chain(user_context, first_input)
+        return chain, user_context
     
     # 로그인 사용자는 기존 체인 재사용
     session_key = f"user-{user_id}"
     
     if session_key not in CONVERSATION_MEMORIES:
-        # 첫 대화: 새 체인 생성 및 컨텍스트 캐싱
-        chain = _create_new_chain(user_context)
+        # 첫 대화: 새 체인 생성 (의도 분류 포함)
+        chain = _create_new_chain(user_context, first_input)
         CONVERSATION_MEMORIES[session_key] = {
             "chain": chain,
-            "user_context": user_context,  # 컨텍스트 캐싱
+            "user_context": user_context,
             "last_access": datetime.now()
         }
-        print(f"✅ 새 대화 세션 생성 (컨텍스트 캐싱): {session_key}")
+        print(f"✅ 새 대화 세션 생성: {session_key}")
+        return chain, user_context
     else:
         # 기존 대화: 저장된 체인 재사용
-        CONVERSATION_MEMORIES[session_key]["last_access"] = datetime.now()
-        print(f"♻️  기존 대화 세션 재사용 (DB 쿼리 스킵): {session_key}")
+        session = CONVERSATION_MEMORIES[session_key]
+        session["last_access"] = datetime.now()
+        print(f"♻️  기존 대화 세션 재사용: {session_key}")
+        return session["chain"], session["user_context"]
+
+
+def _check_profile_completeness(context: dict) -> bool:
+    """마케팅 전략 정보가 충분히 수집되었는지 확인"""
+    if not context or not context.get("memory"):
+        return False
     
-    return CONVERSATION_MEMORIES[session_key]["chain"]
+    memory = context["memory"]
+    if not memory or not hasattr(memory, 'marketing_strategy'):
+        return False
+    
+    strategy = memory.marketing_strategy
+    if not strategy:
+        return False
+    
+    # 필수 필드 체크
+    required_fields = [
+        strategy.get("target_audience"),
+        strategy.get("competitive_advantage"),
+        strategy.get("brand_concept")
+    ]
+    
+    return all(field is not None for field in required_fields)
 
 
-def _create_new_chain(user_context: dict = None) -> ConversationChain:
-    """새 LangChain ConversationChain 생성"""
-    # 사용자 정보를 프롬프트에 반영
-    user_info = ""
-    if user_context:
-        info_parts = []
-        
-        # 사용자 프로필 정보
-        if user_context.get("business_type"):
-            info_parts.append(f"업종: {user_context['business_type']} (이미 알고 있음, 다시 묻지 마)")
-        if user_context.get("location"):
-            info_parts.append(f"위치: {user_context['location']}")
-        if user_context.get("menu_items"):
-            info_parts.append(f"메뉴/제품: {user_context['menu_items']} (이미 알고 있음, 다시 묻지 마)")
-        if user_context.get("business_hours"):
-            info_parts.append(f"영업시간: {user_context['business_hours']}")
-        
-        # 장기 메모리 추가
-        if user_context.get("memory"):
-            info_parts.append(f"\n=== 이전 대화에서 파악한 정보 ===\n{user_context['memory']}")
-        
-        if info_parts:
-            user_info = "사용자 정보 (이미 알고 있는 정보, 다시 묻지 말 것):\n" + "\n".join(info_parts)
+def _format_strategy_info(memory) -> str:
+    """마케팅 전략 정보를 읽기 쉬운 형식으로 변환"""
+    if not memory or not hasattr(memory, 'marketing_strategy') or not memory.marketing_strategy:
+        return "아직 수집된 정보 없음"
+    
+    strategy = memory.marketing_strategy
+    lines = []
+    
+    if strategy.get("target_audience"):
+        ta = strategy["target_audience"]
+        lines.append(f"- 타겟 고객: {ta}")
+    
+    if strategy.get("competitive_advantage"):
+        lines.append(f"- 차별화 포인트: {strategy['competitive_advantage']}")
+    
+    if strategy.get("brand_concept"):
+        lines.append(f"- 브랜드 컨셉: {strategy['brand_concept']}")
+    
+    if strategy.get("marketing_goals"):
+        lines.append(f"- 마케팅 목표: {strategy['marketing_goals']}")
+    
+    return "\n".join(lines) if lines else "아직 수집된 정보 없음"
+
+
+def _create_new_chain(user_context: dict = None, first_input: str = None) -> ConversationChain:
+    """새 LangChain ConversationChain 생성 (의도 기반 프롬프트 선택)"""
+    
+    # 프로필 완성 여부 확인
+    has_complete_profile = _check_profile_completeness(user_context)
+    
+    # 의도 분류 (새 세션이고 first_input이 있을 때만)
+    if first_input:
+        intent = classify_user_intent(first_input, has_complete_profile)
+        print(f"🎯 감지된 의도: {intent.value}")
+    else:
+        # first_input이 없으면 기본값
+        intent = ConversationIntent.PROFILE_BUILDING if not has_complete_profile else ConversationIntent.AD_GENERATION
+    
+    # 의도에 맞는 프롬프트 선택
+    if intent == ConversationIntent.PROFILE_BUILDING:
+        template = PROFILE_BUILDING_TEMPLATE
+    elif intent == ConversationIntent.INFO_UPDATE:
+        template = INFO_UPDATE_TEMPLATE
+    elif intent == ConversationIntent.AD_GENERATION:
+        template = AD_GENERATION_TEMPLATE
+    elif intent == ConversationIntent.ANALYSIS:
+        template = ANALYSIS_TEMPLATE
+    else:
+        template = PROFILE_BUILDING_TEMPLATE
+    
+    # 마케팅 전략 정보 포맷팅
+    strategy_text = _format_strategy_info(user_context.get("memory") if user_context else None)
     
     # LangChain LLM 설정
     llm = ChatOpenAI(
-        model="gpt-4o-mini", 
+        model="gpt-4o", 
         temperature=0.7,
         openai_api_key=os.getenv("OPENAI_API_KEY")
     )
 
-    # 메모리 설정 (MAX_MEMORY_TURNS 만큼 기억)
+    # 메모리 설정
     memory = ConversationBufferWindowMemory(
         k=MAX_MEMORY_TURNS,
         memory_key="history"
@@ -136,11 +348,15 @@ def _create_new_chain(user_context: dict = None) -> ConversationChain:
     
     # 프롬프트 구성
     prompt = PromptTemplate(
-        template=DIALOGUE_TEMPLATE,
-        input_variables=["input"], # history는 memory가 관리
+        template=template,
+        input_variables=["input"],
         partial_variables={
             "format_instructions": parser.get_format_instructions(),
-            "user_info": user_info if user_info else "사용자 정보 없음 (모든 정보를 질문해야 함)"
+            "business_type": user_context.get("business_type", "미확인") if user_context else "미확인",
+            "location": user_context.get("location", "미확인") if user_context else "미확인",
+            "menu_items": user_context.get("menu_items", "미확인") if user_context else "미확인",
+            "business_hours": user_context.get("business_hours", "미확인") if user_context else "미확인",
+            "existing_strategy": strategy_text
         },
     )
 
@@ -166,14 +382,22 @@ def generate_conversation_response(
     Args:
         user_input: 사용자 입력
         user_id: 사용자 ID (로그인한 경우)
-        user_context: 사용자 프로필 및 장기 메모리
+        user_context: 사용자 프로필 및 장기 메모리 (새 세션에만 제공)
     
     Returns:
         DialogueGPTResponse: 다음 질문 또는 최종 콘텐츠
     """
     try:
-        # 사용자별 체인 가져오기 (또는 생성)
-        chain = _get_or_create_chain(user_id, user_context)
+        # 새 세션 여부 확인
+        session_key = f"user-{user_id}" if user_id else "anonymous"
+        is_new_session = session_key not in CONVERSATION_MEMORIES
+        
+        # 체인 로드 또는 생성 (새 세션이고 user_id가 있을 때만 first_input 전달)
+        chain, context = _get_or_create_chain(
+            user_id,
+            user_context,
+            first_input=user_input if (is_new_session and user_id) else None
+        )
         
         # langchain 실행(메모리 자동 관리 & 프롬프트 주입)
         raw_response = chain.invoke(input=user_input)['response'].strip()
@@ -182,15 +406,11 @@ def generate_conversation_response(
         data = _safe_json_from_text(raw_response)
         response = DialogueGPTResponse(**data)
         
-        # 대화 완료 시: 세션 삭제 전 대화 기록 추출 (로그인 사용자만)
-        if response.is_complete and user_id:
-            session_key = f"user-{user_id}"
-            if session_key in CONVERSATION_MEMORIES:
-                # 세션 삭제 전 대화 기록 추출
-                chain = CONVERSATION_MEMORIES[session_key]["chain"]
+        # 대화 완료 시: 세션 삭제 전 대화 기록 추출
+        if response.is_complete:
+            if user_id and session_key in CONVERSATION_MEMORIES:
+                # 대화 기록 추출
                 messages = chain.memory.chat_memory.messages
-                
-                # LangChain 메시지를 dict 형식으로 변환
                 conversation_history = [
                     {
                         "role": "user" if msg.type == "human" else "assistant",
@@ -203,7 +423,7 @@ def generate_conversation_response(
                 
                 # 세션 삭제
                 del CONVERSATION_MEMORIES[session_key]
-                print(f"🗑️  대화 완료, 세션 삭제 (체인 + 캐싱된 컨텍스트): {session_key}")
+                print(f"🗑️  대화 완료, 세션 삭제: {session_key}")
         
         return response
 

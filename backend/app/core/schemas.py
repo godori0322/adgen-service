@@ -161,3 +161,49 @@ class AdRequestResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ==================== 마케팅 전략 정보 스키마 ====================
+
+class MarketingStrategy(BaseModel):
+    """마케팅 전략 정보 (JSON 저장용)"""
+    
+    target_audience: Optional[dict] = Field(
+        default=None,
+        description="타겟 고객 정보",
+        example={
+            "age_group": ["20대", "30대"],
+            "occupation": ["직장인"],
+            "gender": "여성",
+            "characteristics": ["조용한 공간 선호"]
+        }
+    )
+    
+    competitive_advantage: Optional[List[str]] = Field(
+        default=None,
+        description="차별화 포인트",
+        example=["넓은 공간", "조용한 분위기"]
+    )
+    
+    brand_concept: Optional[dict] = Field(
+        default=None,
+        description="브랜드 컨셉",
+        example={
+            "keywords": ["북유럽 감성", "힐링"],
+            "tone": "차분하고 따뜻한"
+        }
+    )
+    
+    marketing_goals: Optional[List[str]] = Field(
+        default=None,
+        description="마케팅 목표",
+        example=["평일 오후 매출 증대", "신규 고객 유치"]
+    )
+    
+    preferences: Optional[dict] = Field(
+        default=None,
+        description="마케팅 선호도",
+        example={
+            "channels": ["인스타그램"],
+            "content_style": ["감성 사진"]
+        }
+    )
