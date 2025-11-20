@@ -88,11 +88,11 @@ def _get_or_create_chain(user_id: Optional[int], user_context: dict = None) -> C
             "user_context": user_context,  # 컨텍스트 캐싱
             "last_access": datetime.now()
         }
-        print(f"✅ 새 대화 세션 생성 (컨텍스트 캐싱): {session_key}")
+        print(f"새 대화 세션 생성 (컨텍스트 캐싱): {session_key}")
     else:
         # 기존 대화: 저장된 체인 재사용
         CONVERSATION_MEMORIES[session_key]["last_access"] = datetime.now()
-        print(f"♻️  기존 대화 세션 재사용 (DB 쿼리 스킵): {session_key}")
+        print(f"기존 대화 세션 재사용 (DB 쿼리 스킵): {session_key}")
     
     return CONVERSATION_MEMORIES[session_key]["chain"]
 

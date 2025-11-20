@@ -46,8 +46,27 @@ class GPTResponse(BaseResponse):
 class AdGenerateResponse(GPTResponse):
     image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
 
+# 이미지 생성 관련 스키마 그룹
 class DiffusionRequest(BaseModel):
     prompt: str = Field(..., description="이미지 생성용 프롬프트")
+
+# =============ControlNet/IP-Adapter 요청 스키마(추가)===========================
+class DiffusionControlRequest(BaseModel):
+    # 텍스트 정보
+    prompt: str = Field(..., description="생성할 배경에 대한 텍스트 프롬프트")
+    # 이미지 정보(누끼 처리된 제품 사진) -> 누끼딴 이미지의 base64 문자열
+    original_image_b64: str = Field(..., description="원본 제품 이미지 (Base64). Depth Map과 IP-Adapter 임베딩 추출에 사용.")
+    mask_b64: str = Field(..., description="누끼팀(MobilcSAM)이 추출한 흑백 마스크 (Base64). Inpainting 영역 지정에 사용.")   
+    # 제어 강도 파라미터(튜닝용)
+    # Controlnet Depth 강도
+    control_weight: Optional[float] = Field(1.0, ge=0.0, le=2.0, description="ControlNet (Depth) 제어 강도. 1.0 권장.")
+    # IP-Adapter 강도 (스타일 주입)
+    ip_adapter_scale: Optional[float] = Field(0.7, ge=0.0, le=1.0, description="IP-Adapter 스타일 주입 강도. 0.7 권장.")
+
+# 최종 이미지 반환
+class DiffusionControlResponse(BaseModel):
+    image_b64: str = Field(..., description="배경 합성 및 Control이 완료된 최종 이미지 (Base64)")
+
 
 class DiffusionResponse(BaseResponse):
     image_url: Optional[str] = Field(None, description="생성된 이미지 URL")
