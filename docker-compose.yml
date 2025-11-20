@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: adgen_db
+    environment:
+      POSTGRES_USER: adgen_user
+      POSTGRES_PASSWORD: adgen_password
+      POSTGRES_DB: adgen
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: always
+    networks:
+      - app-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: adgen_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin1234
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO 콘솔
+    volumes:
+      - minio-data:/data
+    restart: always
+    networks:
+      - app-net
+
+networks:
+  app-net:
+
+volumes:
+  db-data:
+  minio-data:
