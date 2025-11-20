@@ -41,6 +41,7 @@ async def generate_marketing_content(req: GPTRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # 추가: multi-turn 대화 API : dialogue 요청 처리
 @router.post("/dialogue")
 async def handle_marketing_dialog(
@@ -85,9 +86,9 @@ async def handle_marketing_dialog(
                 "business_hours": current_user.business_hours,
                 "memory": long_term_memory  # 장기 메모리 추가
             }
-            print(f"📊 첫 대화: 사용자 컨텍스트 조회 완료 (user_id={current_user.id})")
+            print(f"첫 대화: 사용자 컨텍스트 조회 완료 (user_id={current_user.id})")
         elif session_exists:
-            print(f"⚡ 세션 재사용: DB 쿼리 스킵 (user_id={current_user.id})")
+            print(f"세션 재사용: DB 쿼리 스킵 (user_id={current_user.id})")
         
         # 4. 대화 진행 (세션 재사용 시 캐싱된 컨텍스트 사용)
         response = generate_conversation_response(
@@ -118,7 +119,7 @@ async def handle_marketing_dialog(
                 )
                 
             except Exception as mem_err:
-                print(f"⚠️ 메모리 업데이트 실패 (비치명적): {mem_err}")
+                print(f"메모리 업데이트 실패 (비치명적): {mem_err}")
                 # 메모리 업데이트 실패해도 응답은 반환
         
         # 6. 응답 반환
@@ -132,5 +133,3 @@ async def handle_marketing_dialog(
         raise HTTPException(status_code=500, detail=f"GPT 응답 서비스 오류: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"서버 오류: {e}")
-
-#
