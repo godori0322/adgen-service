@@ -148,10 +148,10 @@ export default function SignupPage() {
             error={passwordError}
           />
           <TextInput
-            id="text"
+            id="email"
             label="이메일"
             placeholder="example@owner.com"
-            type="email"
+            type="text"
             value={form.email}
             onChange={handleChange}
             error={emailError}
