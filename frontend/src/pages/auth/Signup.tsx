@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { registerRequest } from "../../api/auth";
 import Button from "../../components/common/Button";
 import TextInput from "../../components/common/TextInput";
 import { PageTitle } from "../../components/common/Title";
-import { registerRequest } from "../../api/authApi";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -22,31 +21,30 @@ export default function SignupPage() {
     closeTime: "",
     menuItems: [] as string[],
   });
-  const [menuInput, setMenuInput] = useState('');
+  const [menuInput, setMenuInput] = useState("");
   const [menuError, setMenuError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const { id, value } = e.target;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
 
-  setForm((prev) => ({ ...prev, [id]: value }));
+    setForm((prev) => ({ ...prev, [id]: value }));
 
-  // 이메일 검증
-  if (id === "email") {
-    if (!emailRegex.test(value)) setEmailError("유효한 이메일 형식이 아닙니다.");
-    else setEmailError(null);
-  }
+    // 이메일 검증
+    if (id === "email") {
+      if (!emailRegex.test(value)) setEmailError("유효한 이메일 형식이 아닙니다.");
+      else setEmailError(null);
+    }
 
-  // 비밀번호 8자 체크
-  if (id === "password") {
-    if (value.length < 8) setPasswordError("비밀번호는 8자 이상이어야 합니다.");
-    else setPasswordError(null);
-  }
-};
-
+    // 비밀번호 8자 체크
+    if (id === "password") {
+      if (value.length < 8) setPasswordError("비밀번호는 8자 이상이어야 합니다.");
+      else setPasswordError(null);
+    }
+  };
 
   const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing) return;
@@ -63,20 +61,20 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setMenuError(null);
       setForm((prev) => ({
         ...prev,
-        menuItems: [...prev.menuItems, menuInput]
+        menuItems: [...prev.menuItems, menuInput],
       }));
-      setMenuInput('');
+      setMenuInput("");
     }
-  }
+  };
   const removeMenuItem = (index: number) => {
     setForm((prev) => ({
       ...prev,
-      menuItems: prev.menuItems.filter((_, idx) => idx!==index),
+      menuItems: prev.menuItems.filter((_, idx) => idx !== index),
     }));
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null); 
+    setFormError(null);
     setEmailError(null);
     setPasswordError(null);
 
@@ -150,7 +148,7 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             error={passwordError}
           />
           <TextInput
-            id="email"
+            id="text"
             label="이메일"
             placeholder="example@owner.com"
             type="email"
@@ -237,7 +235,7 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
               ))}
             </div>
           </div>
-          <Button text={loading ? "가임중... " : "회원가입"} type="submit" disabled={loading} />
+          <Button text={loading ? "가입중... " : "회원가입"} type="submit" disabled={loading} />
           <div className="min-h-5 mt-2">
             {formError && (
               <p className="text-xs text-red-600 mt-1" role="alert" aria-live="polite">

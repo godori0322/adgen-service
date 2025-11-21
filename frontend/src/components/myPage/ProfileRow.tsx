@@ -3,6 +3,7 @@ interface ProfileRowProps {
   value: string;
   editMode: boolean;
   onChange?: (value: string) => void;
+  onKeyDown?: (value: string) => void;
 }
 
 export default function ProfileRow({ label, value, editMode, onChange }: ProfileRowProps) {
