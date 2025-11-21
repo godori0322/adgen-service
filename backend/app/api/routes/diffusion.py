@@ -1,3 +1,4 @@
+# diffusion.py
 import base64
 from io import BytesIO
 import io
@@ -74,12 +75,15 @@ def _run_auto_synthesis(
 ) -> Image.Image:
     """세그멘테이션 → 합성까지 실행하고 최종 이미지를 PIL로 반환."""
     model = _get_segmentation_model()
-    mask_array, cutout_image = model.remove_background(original_image)
-    mask_image = _mask_array_to_pil(mask_array)
+    mask_array, cutout_image = model.remove_background(original_image)  # sam으로 마스크 + 컷아웃 get
+    mask_image = _mask_array_to_pil(mask_array)     # 마스크(nparray 0~1) -> l 모드로 pil 이미지
+    # 컷아웃 RGBA -> IP-Adapter/ControlNet용 RGB 이미지로 변경(추가)
+    product_rgb = cutout_image.convert("RGB")
 
+    # 제품 RGB -> originalimage로 넘기는 부분
     return synthesize_image(
         prompt=prompt,
-        original_image=cutout_image,
+        original_image=product_rgb,     # origianl_image == product rgb
         mask_image=mask_image,
         control_weight=control_weight,
         ip_adapter_scale=ip_adapter_scale,
@@ -88,48 +92,6 @@ def _run_auto_synthesis(
 # ==============================================================================
 # API 라우트
 # ==============================================================================
-
-@router.post("/synthesize", response_model=DiffusionControlResponse)
-async def diffusion_synthesize(request_body: DiffusionControlRequest = Body(...)):
-    """
-    ControlNet Depth와 IP-Adapter를 활용하여 이미지를 합성
-    """
-    print("[API] Received synthesis request.")
-    
-    try:
-        # 1. Base64 입력 디코딩 (클라이언트 데이터 -> PIL Image 객체)
-        original_image = _base64_to_image(request_body.original_image_b64)
-        mask_image = _base64_to_image(request_body.mask_b64)
-        
-        if original_image is None or mask_image is None:
-            raise ValueError("Original image or mask image is missing or invalid.")
-
-        # 2. 서비스 로직 호출
-        final_image_pil = synthesize_image(
-            prompt=request_body.prompt,
-            original_image=original_image,
-            mask_image=mask_image,
-            control_weight=request_body.control_weight,
-            ip_adapter_scale=request_body.ip_adapter_scale
-        )
-
-        # 3. PIL Image 객체 인코딩 (PIL Image 객체 -> Base64 문자열)
-        final_image_b64 = _image_to_base64(final_image_pil)
-        
-        print("[API] Synthesis successful. Returning Base64 image.")
-
-        # DiffusionControlResponse 스키마에 맞춰 'image_b64' 인자 사용
-        return DiffusionControlResponse(
-            image_b64=final_image_b64,
-            status="success",
-            message="Image synthesis successful."
-        )
-
-    except Exception as e:
-        print(f"[FATAL] An unexpected error occurred: {e}")
-        # 오류가 발생해도 응답 스키마의 기본 필드를 채워서 반환
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/synthesize/auto", response_model=DiffusionControlResponse)
 async def diffusion_synthesize_auto(request_body: DiffusionAutoRequest = Body(...)):

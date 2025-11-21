@@ -55,6 +55,7 @@ dependencies = [
     "timm==0.9.12",
     "mobile-sam",
     "controlnet-aux>=0.0.10",
+    "mediapipe>=0.10.14",
 ]
 
 [project.optional-dependencies]

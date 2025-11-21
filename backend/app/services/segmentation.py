@@ -87,9 +87,9 @@ def preprocess_for_sam(img_rgb):
 
     return img
 
-# 여러 마스크 후보 중 이미지 중앙에 가장 가까운 마스크 선택
+# ==========여러 마스크 후보 중 이미지 중앙에 가장 가까운 마스크 선택 --> 가독성만 개선
 def choose_most_centered_mask(masks, H, W):
-    center = np.array([H / 2, W / 2])
+    center = np.array([H / 2, W / 2], dtype=np.float32)
     best = None
     best_dist = float("inf")
 
@@ -100,12 +100,14 @@ def choose_most_centered_mask(masks, H, W):
             continue
         cy = np.mean(ys)
         cx = np.mean(xs)
-        dist = np.linalg.norm(np.array([cy, cx] - center))
+        point = np.array([cy, cx], dtype=np.float32)
+        dist = np.linalg.norm(point - center)
         if dist < best_dist:
             best_dist = dist
             best = m
 
     return best if best is not None else masks[0]
+
 
 # MobileSAM의 AutoMaskGenerator는 "제품:1, 배경:0" 마스킹이 항상 보장 X
 # 조명이 강하거나 제품과 배경 구분이 명확하지 않은 경우 mask 반전 위험 있음

@@ -9,6 +9,7 @@ from diffusers import (
 )
 from controlnet_aux import MidasDetector
 import base64
+import numpy as np
 
 # -----------------------------------------------------------------------------
 # 설정: SD 1.5 + ControlNet(Depth) + IP-Adapter(SD1.5)
@@ -23,24 +24,6 @@ IP_ADAPTER_WEIGHT_NAME = "ip-adapter_sd15.bin"  # SD1.5용 IP-Adapter 가중치
 _pipeline = None
 _midas_detector = None
 _ip_adapter_loaded = False
-
-
-# -----------------------------------------------------------------------------
-# (필요하면 쓰도록 남겨두는) Base64 <-> PIL 유틸
-# -----------------------------------------------------------------------------
-def pil_to_base64(img: Image.Image, fmt: str = "PNG") -> str:
-    """PIL 이미지를 base64 문자열로 변환."""
-    buf = BytesIO()
-    img.save(buf, format=fmt)
-    buf.seek(0)
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-
-def base64_to_pil(b64: str) -> Image.Image:
-    """base64 문자열을 PIL 이미지로 변환."""
-    data = base64.b64decode(b64)
-    img = Image.open(BytesIO(data))
-    return img.convert("RGBA")
 
 
 # -----------------------------------------------------------------------------
@@ -165,6 +148,7 @@ def synthesize_image(
         # ControlNet depth는 해상도 크게 민감하지 않지만,
         # 512~768 정도에서 안정적으로 동작 → 여기서는 image_resolution=768 사용
         depth_input = original_image  # 사이즈는 MidasDetector 안에서 처리
+                                    # auto 모드에서는 product_rgb
 
         # --------------------------------------------------------------
         # 2. Depth 맵 생성
@@ -175,13 +159,29 @@ def synthesize_image(
             image_resolution=768,
         )
 
+        # =========== + depth_map 정규화  추가================
+        # result = pip 부분에서 depth_map은 mias가 반환한 raw  depth map임 (0~255 grayscale)
+        # controlnet depth pipeline은 float normalized map을 기대함 !!! (256 grayscale 안된다)
+        # depth map을 normalize 없이 넣으면 구조가 검은색, 흰색으로 뭉개짐 --> 프롬프트 안먹힘
+        # --> 따라서 midasdetector 결과를 정규화함
+        depth_np = np.array(depth_map)
+
+        # normzliae 0~255
+        depth_np = depth_np - depth_np.min()
+        if depth_np.max() > 0:  # 0으로 나누는 문제 방지
+            depth_np = depth_np / depth_np.max()
+        
+        depth_np = (depth_np * 255).astype("uint8")
+        depth_map = Image.fromarray(depth_np)
+
+
         # --------------------------------------------------------------
         # 3. IP-Adapter 스케일 설정
         # --------------------------------------------------------------
         ip_kwargs = {}
         if _ip_adapter_loaded and ip_adapter_scale > 0:
             pipe.set_ip_adapter_scale(ip_adapter_scale)
-            ip_kwargs["ip_adapter_image"] = original_image
+            ip_kwargs["ip_adapter_image"] = original_image 
             print("[IP-Adapter] ip_adapter_image 및 scale 설정 완료.")
         else:
             pipe.set_ip_adapter_scale(0.0)
@@ -199,10 +199,11 @@ def synthesize_image(
         result = pipe(
             prompt=prompt,
             negative_prompt=negative_prompt,
-            image=depth_map,  # ControlNet depth conditioning
+            image=original_image,   # ControlNet depth conditioning 이미지: synthesize_image에서 original_iamge = product_rgb(누끼이미지)가 아니라 products 포함 원본 이미지 전체가 들어가서 교체
+            control_image=depth_map,
             controlnet_conditioning_scale=control_weight,
-            guidance_scale=7.5,
-            num_inference_steps=30,
+            guidance_scale=9.0,     # 복잡한 배경/카페/사람 배경을 생성하려면 : 9~12 (0.7에서 변경)
+            num_inference_steps=40, # 상동 : 40~50
             generator=generator,
             **ip_kwargs,  # ip_adapter_image=original_image (옵션)
         )
