@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { generateDialogue, generateDiffusion } from "../api/generate";
+import { generateDialogueRequest, generateDiffusionRequest } from "../api/generate";
 import { formatChatResponse } from "../utils/chatFormatter";
 import { useDotsAnimation } from "./useDotsAnimation";
 import { useWhisper } from "./useWhisper";
@@ -36,7 +36,7 @@ export function useVoiceChat() {
       setMessages((prev) =>
         prev.map((m) => (m.tempId === userTempId ? { ...m, content: userText } : m))
       );
-      
+
       // 이미지 + generate
       const assistantTempId = Date.now() + 1;
       setMessages((prev) => [
@@ -46,7 +46,7 @@ export function useVoiceChat() {
       startDots(assistantTempId);
 
       // 멀티턴 대화 모드
-      const adRes = await generateDialogue(userText);
+      const adRes = await generateDialogueRequest(userText);
       stopDots();
       if (!adRes.is_complete) {
         setMessages((prev) =>
@@ -70,7 +70,7 @@ export function useVoiceChat() {
           { role: "assistant", content: "🖼️ 이미지 생성 중입니다...", tempId: imgTempId },
         ]);
 
-        const imgSrc = await generateDiffusion(adRes.final_content.image_prompt);
+        const imgSrc = await generateDiffusionRequest(adRes.final_content.image_prompt);
 
         // 이미지 채우기
         setMessages((prev) =>
@@ -79,7 +79,7 @@ export function useVoiceChat() {
       }
     } catch (err: any) {
       console.error("오류:", err.message);
-      const content = `❌ 오류 발생가 발생하였습니다. 다시 시도 부탁드립니다.`; 
+      const content = `❌ 오류 발생가 발생하였습니다. 다시 시도 부탁드립니다.`;
       setMessages((prev) => {
         if (prev.length === 0) {
           return [{ role: "assistant", content }];
@@ -87,11 +87,7 @@ export function useVoiceChat() {
 
         const lastIndex = prev.length - 1;
 
-        return prev.map((m, idx) =>
-          idx === lastIndex
-            ? { ...m, content }
-            : m
-        );
+        return prev.map((m, idx) => (idx === lastIndex ? { ...m, content } : m));
       });
       stopDots();
     }
