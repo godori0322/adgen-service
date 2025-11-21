@@ -10,10 +10,9 @@ module.exports = {
     {
       name: "frontend",
       script: "pnpm",
-      args: "-c 'pnpm install && pnpm build && pnpm preview --host 0.0.0.0 --port 5173'",
+      args: "start:pm2",
       cwd: "./frontend",
       interpreter: "none",
-      watch: false,
     },
   ],
 };

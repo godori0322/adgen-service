@@ -7,7 +7,8 @@
     "dev": "vite --debug",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start:pm2": "pnpm install && pnpm build && pnpm preview --host 0.0.0.0 --port 5173"
   },
   "dependencies": {
     "react": "^19.2.0",
