@@ -13,24 +13,20 @@ dependencies = [
     "fastapi>=0.121.0",
     "uvicorn[standard]>=0.38.0",
     "python-multipart>=0.0.20",
-    
     # Database & ORM
     "sqlalchemy>=2.0.0",
     "psycopg2-binary>=2.9.9",
     "pgvector>=0.2.5",
-    
     # LangChain
     "langchain>=1.0.5",
     "langchain-classic>=1.0.0",
     "langchain-community>=0.4.1",
     "langchain-core>=1.0.4",
     "langchain-openai>=1.0.2",
-    
     # Authentication & Security
     "passlib[argon2]>=1.7.4",
     "python-jose[cryptography]>=3.3.0",
     "argon2-cffi>=23.1.0",
-    
     # AI & ML
     "openai>=2.7.1",
     "torch>=2.6.0",
@@ -40,24 +36,20 @@ dependencies = [
     "transformers>=4.44.0",
     "accelerate>=0.34.0",
     "safetensors>=0.6.2",
-    
     # Image Processing
     "pillow>=11.3.0",
-    
     # Data Processing
     "numpy>=2.1.2",
     "pandas>=2.3.3",
-    
     # Utilities
     "python-dotenv>=1.2.1",
     "requests>=2.31.0",
+    "httpx>=0.24.0",
     "tqdm>=4.67.1",
-    
     # Development & Notebook
     "jupyter>=1.1.1",
     "ipykernel>=7.1.0",
     "matplotlib>=3.10.7",
-    
     # Frontend (optional)
     "streamlit>=1.51.0",
 ]

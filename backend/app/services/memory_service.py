@@ -5,15 +5,15 @@ import os
 import json
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from openai import OpenAI
+from openai import AsyncOpenAI
 from backend.app.core.models import UserMemory
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def get_embedding(text: str) -> List[float]:
-    """텍스트를 임베딩 벡터로 변환 (OpenAI text-embedding-3-small)"""
+async def get_embedding(text: str) -> List[float]:
+    """[비동기] 텍스트를 임베딩 벡터로 변환 (OpenAI text-embedding-3-small)"""
     try:
-        response = client.embeddings.create(
+        response = await client.embeddings.create(
             model="text-embedding-3-small",
             input=text
         )
@@ -23,164 +23,172 @@ def get_embedding(text: str) -> List[float]:
         return None
 
 
-def get_user_memory(db: Session, user_id: int) -> Optional[str]:
+def get_user_memory(db: Session, user_id: int) -> Optional[UserMemory]:
     """사용자의 장기 메모리 조회 (최신 하나)"""
     memory = db.query(UserMemory).filter(
         UserMemory.user_id == user_id
     ).order_by(UserMemory.updated_at.desc()).first()
     
-    return memory.memory_text if memory else None
+    return memory
 
 
-def update_user_memory(
+async def extract_marketing_strategy_from_conversation(
+    conversation_history: List[dict],
+    final_content: dict,
+    existing_strategy: dict = None
+) -> dict:
+    """
+    [비동기] 대화 기록에서 마케팅 전략 정보를 구조화하여 추출
+    
+    Args:
+        conversation_history: 전체 대화 기록
+        final_content: 최종 생성된 콘텐츠
+        existing_strategy: 기존 전략 정보
+        
+    Returns:
+        MarketingStrategy 형태의 딕셔너리
+    """
+    conversation_text = "\n".join([
+        f"{msg['role']}: {msg['content']}" 
+        for msg in conversation_history
+    ])
+    
+    prompt = f"""
+다음 대화에서 마케팅 전략 정보를 추출하여 JSON 형식으로 반환하세요.
+
+기존 정보:
+{json.dumps(existing_strategy, ensure_ascii=False) if existing_strategy else "없음"}
+
+대화 기록:
+{conversation_text}
+
+최종 콘텐츠:
+{json.dumps(final_content, ensure_ascii=False)}
+
+다음 JSON 형식으로 출력하세요 (대화에서 언급되지 않은 필드는 null):
+{{
+  "target_audience": {{
+    "age_group": ["20대", "30대"] or null,
+    "occupation": ["직장인"] or null,
+    "gender": "여성" or null,
+    "characteristics": ["특성1", "특성2"] or null
+  }},
+  "competitive_advantage": ["강점1", "강점2"] or null,
+  "brand_concept": {{
+    "keywords": ["키워드1", "키워드2"] or null,
+    "tone": "톤앤매너" or null
+  }},
+  "marketing_goals": ["목표1", "목표2"] or null,
+  "preferences": {{
+    "channels": ["채널1"] or null,
+    "content_style": ["스타일1"] or null
+  }}
+}}
+
+기존 정보가 있으면 병합하고, 새 정보로 업데이트하세요.
+"""
+    
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.3
+        )
+        
+        extracted = json.loads(response.choices[0].message.content)
+        
+        # 기존 정보와 병합
+        if existing_strategy:
+            merged = existing_strategy.copy()
+            for key, value in extracted.items():
+                if value is not None:
+                    if isinstance(value, dict) and key in merged and merged[key]:
+                        # 딕셔너리는 병합
+                        merged[key] = {**merged.get(key, {}), **value}
+                    elif isinstance(value, list) and key in merged and merged[key]:
+                        # 리스트는 중복 제거 후 병합
+                        existing_list = merged.get(key, [])
+                        merged[key] = list(set(existing_list + value))
+                    else:
+                        merged[key] = value
+            return merged
+        else:
+            return extracted
+            
+    except Exception as e:
+        print(f"⚠️ 마케팅 전략 추출 실패: {e}")
+        return existing_strategy or {}
+
+
+async def update_user_memory(
     db: Session, 
     user_id: int, 
-    conversation_summary: str,
-    new_insights: dict
+    conversation_history: List[dict],
+    final_content: dict
 ) -> UserMemory:
     """
-    GPT를 활용하여 기존 메모리 + 새로운 대화 내용을 통합
+    [비동기] 대화 기록에서 마케팅 전략 정보를 추출하여 JSON 형식으로 저장
     
     Args:
         db: 데이터베이스 세션
         user_id: 사용자 ID
-        conversation_summary: 이번 대화 요약
-        new_insights: 추출된 새로운 정보 (dict)
+        conversation_history: 전체 대화 기록
+        final_content: 최종 생성된 콘텐츠
     
     Returns:
         업데이트된 UserMemory 객체
     """
-    # 1. 기존 메모리 조회
+    print(f"🔍 update_user_memory 시작 - user_id: {user_id}")
+    
+    # 1. 기존 메모리 조회 (동기 - 빠른 DB 조회)
     existing_memory = db.query(UserMemory).filter(
         UserMemory.user_id == user_id
     ).order_by(UserMemory.updated_at.desc()).first()
     
-    existing_text = existing_memory.memory_text if existing_memory else ""
+    print(f"📦 기존 메모리: {'있음' if existing_memory else '없음'}")
     
-    # 2. GPT에게 메모리 업데이트 요청
-    updated_memory_text = _merge_memory_with_gpt(
-        existing_memory=existing_text,
-        conversation_summary=conversation_summary,
-        new_insights=new_insights
+    existing_strategy = existing_memory.marketing_strategy if existing_memory else None
+    
+    # 2. 대화에서 마케팅 전략 정보 추출 (비동기 - GPT API)
+    print(f"🤖 GPT로 전략 정보 추출 시작...")
+    updated_strategy = await extract_marketing_strategy_from_conversation(
+        conversation_history,
+        final_content,
+        existing_strategy
     )
+    print(f"✅ 추출된 전략: {json.dumps(updated_strategy, ensure_ascii=False)[:200]}...")
     
-    # 3. 임베딩 생성
-    embedding = get_embedding(updated_memory_text)
+    # 3. 임베딩 생성 (비동기 - OpenAI API)
+    print(f"🔢 임베딩 생성 중...")
+    embedding_text = json.dumps(updated_strategy, ensure_ascii=False)
+    embedding = await get_embedding(embedding_text)
+    print(f"✅ 임베딩 생성 완료: {len(embedding) if embedding else 0}차원")
     
-    # 4. DB 저장/업데이트
+    # 4. DB 저장/업데이트 (동기 - 빠른 작업)
     if existing_memory:
-        existing_memory.memory_text = updated_memory_text
+        print(f"🔄 기존 메모리 업데이트...")
+        existing_memory.marketing_strategy = updated_strategy
         existing_memory.embedding = embedding
         db.commit()
         db.refresh(existing_memory)
+        print(f"✅ 업데이트 완료 - memory_id: {existing_memory.id}")
         return existing_memory
     else:
+        print(f"🆕 새 메모리 생성...")
         new_memory = UserMemory(
             user_id=user_id,
-            memory_text=updated_memory_text,
+            marketing_strategy=updated_strategy,
             embedding=embedding
         )
         db.add(new_memory)
         db.commit()
         db.refresh(new_memory)
+        print(f"✅ 생성 완료 - memory_id: {new_memory.id}")
         return new_memory
 
 
-def _merge_memory_with_gpt(
-    existing_memory: str,
-    conversation_summary: str,
-    new_insights: dict
-) -> str:
-    """GPT를 활용하여 기존 메모리와 새 정보를 통합"""
-    
-    prompt = f"""
-우리가 제공하는 서비스는 소상공인을 위한 마케팅 서비스입니다.(생성형 AI로 광고이미지와 문구를 생성해서 사용자에게 제공합니다.) 
-우리 서비스는 사용자 맞춤형으로 이전 대화를 통해 사용자의 사업장 정보를 반영하고 기록합니다. 당신이 소상공인 담당 마케터라고 가정하고
-마케팅에 필요한 기존 메모리와 새로운 대화 내용을 통합하여 업데이트된 메모리를 생성하세요.(메모리는 텍스트 형태로 관리합니다)
-
-### 규칙:
-1. **중복 제거**: 기존 정보와 중복되는 내용은 추가하지 마세요
-2. **새 정보 추가**: 새롭게 알게 된 사실만 추가하세요
-3. **시즌/이벤트 정보 정리**: 
-   - **계절 이벤트**: 계절이 바뀌면 이전 계절 이벤트 정보 삭제 (예: 여름 메뉴 추가 시 겨울 할인 정보 제거)
-   - **기간 한정**: 종료되거나 과거의 프로모션은 제거
-   - **현재성 우선**: 최근 1~2개 이벤트만 유지, 오래된 정보는 삭제
-4. **간결함 유지**: 핵심만 담아 3~4 문단 이내로 작성하세요
-5. **자연스러운 문장**: 불필요한 형식 없이 자연스러운 문장으로 작성하세요
-
-### 기존 메모리:
-{existing_memory if existing_memory else "(메모리 없음)"}
-
-### 새로운 대화 요약:
-{conversation_summary}
-
-### 추출된 새 정보:
-{json.dumps(new_insights, ensure_ascii=False, indent=2)}
-
-### 업데이트된 메모리 (중복 없이, 자연스럽게):
-""".strip()
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=500
-        )
-        
-        updated_memory = response.choices[0].message.content.strip()
-        return updated_memory
-    
-    except Exception as e:
-        print(f"❌ Memory merge failed: {e}")
-        # 폴백: 기존 메모리 + 새 정보 단순 결합
-        if existing_memory:
-            return f"{existing_memory}\n\n{conversation_summary}"
-        else:
-            return conversation_summary
 
 
-def create_conversation_summary(final_content: dict) -> str:
-    """최종 콘텐츠에서 대화 요약 생성 (간단한 텍스트)"""
-    
-    prompt = f"""
-우리가 제공하는 서비스는 소상공인을 위한 사용자 맞춤형 마케팅 서비스입니다.(생성형 AI로 광고이미지와 문구를 생성해서 사용자에게 제공합니다.)
-
-다음 마케팅 콘텐츠 생성 결과를 간단히 요약하세요:
-
-최종 생성물:
-{json.dumps(final_content, ensure_ascii=False)}
-
-요약 (한 문단, 핵심만):
-""".strip()
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=200
-        )
-        
-        return response.choices[0].message.content.strip()
-    
-    except Exception as e:
-        print(f"❌ Conversation summary failed: {e}")
-        # 폴백
-        return f"사용자가 {final_content.get('idea', '마케팅 콘텐츠')}를 요청했습니다."
 
 
-def extract_insights_from_final_content(final_content: dict) -> dict:
-    """최종 콘텐츠에서 핵심 정보 추출"""
-    insights = {}
-    
-    if "idea" in final_content:
-        insights["generated_idea"] = final_content["idea"]
-    
-    if "caption" in final_content:
-        insights["caption_style"] = final_content["caption"]
-    
-    if "hashtags" in final_content and final_content["hashtags"]:
-        insights["preferred_hashtags"] = final_content["hashtags"][:5]  # 상위 5개만
-    
-    return insights

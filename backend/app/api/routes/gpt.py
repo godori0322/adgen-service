@@ -28,7 +28,7 @@ security = HTTPBearer(auto_error=False)
 @router.post("/generate", response_model=GPTResponse)
 async def generate_marketing_content(req: GPTRequest):
     try:
-        result = generate_marketing_idea(
+        result = await generate_marketing_idea(
             prompt_text=req.text,
             context=req.context
         )
@@ -90,7 +90,7 @@ async def handle_marketing_dialog(
             print(f"⚡ 세션 재사용: DB 쿼리 스킵 (user_id={current_user.id})")
         
         # 4. 대화 진행 (세션 재사용 시 캐싱된 컨텍스트 사용)
-        response = generate_conversation_response(
+        response = await generate_conversation_response(
             user_input=request.user_input,
             user_id=current_user.id if current_user else None,
             user_context=user_context  # 첫 요청: 딕셔너리, 이후: None (세션에서 재사용)
@@ -99,23 +99,14 @@ async def handle_marketing_dialog(
         # 5. 대화 완료 시 메모리 업데이트 (로그인 사용자만)
         if response.is_complete and response.final_content and current_user:
             try:
-                # 대화 요약 (최종 콘텐츠 기반)
-                summary = memory_service.create_conversation_summary(
-                    final_content=response.final_content.dict()
-                )
-                
-                # 추출된 정보
-                insights = memory_service.extract_insights_from_final_content(
-                    response.final_content.dict()
-                )
-                
-                # 장기 메모리 업데이트
-                memory_service.update_user_memory(
+                # 장기 메모리 업데이트 (비동기 - GPT API + 임베딩)
+                await memory_service.update_user_memory(
                     db=db,
                     user_id=current_user.id,
-                    conversation_summary=summary,
-                    new_insights=insights
+                    conversation_history=response.conversation_history,
+                    final_content=response.final_content.dict()
                 )
+                print(f"✅ 장기 메모리 업데이트 완료 (JSON 형식)")
                 
             except Exception as mem_err:
                 print(f"⚠️ 메모리 업데이트 실패 (비치명적): {mem_err}")
