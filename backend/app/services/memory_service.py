@@ -5,15 +5,15 @@ import os
 import json
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from openai import OpenAI
+from openai import AsyncOpenAI
 from backend.app.core.models import UserMemory
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def get_embedding(text: str) -> List[float]:
-    """텍스트를 임베딩 벡터로 변환 (OpenAI text-embedding-3-small)"""
+async def get_embedding(text: str) -> List[float]:
+    """[비동기] 텍스트를 임베딩 벡터로 변환 (OpenAI text-embedding-3-small)"""
     try:
-        response = client.embeddings.create(
+        response = await client.embeddings.create(
             model="text-embedding-3-small",
             input=text
         )
@@ -32,13 +32,13 @@ def get_user_memory(db: Session, user_id: int) -> Optional[UserMemory]:
     return memory
 
 
-def extract_marketing_strategy_from_conversation(
+async def extract_marketing_strategy_from_conversation(
     conversation_history: List[dict],
     final_content: dict,
     existing_strategy: dict = None
 ) -> dict:
     """
-    대화 기록에서 마케팅 전략 정보를 구조화하여 추출
+    [비동기] 대화 기록에서 마케팅 전략 정보를 구조화하여 추출
     
     Args:
         conversation_history: 전체 대화 기록
@@ -89,7 +89,7 @@ def extract_marketing_strategy_from_conversation(
 """
     
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
@@ -121,14 +121,14 @@ def extract_marketing_strategy_from_conversation(
         return existing_strategy or {}
 
 
-def update_user_memory(
+async def update_user_memory(
     db: Session, 
     user_id: int, 
     conversation_history: List[dict],
     final_content: dict
 ) -> UserMemory:
     """
-    대화 기록에서 마케팅 전략 정보를 추출하여 JSON 형식으로 저장
+    [비동기] 대화 기록에서 마케팅 전략 정보를 추출하여 JSON 형식으로 저장
     
     Args:
         db: 데이터베이스 세션
@@ -141,7 +141,7 @@ def update_user_memory(
     """
     print(f"🔍 update_user_memory 시작 - user_id: {user_id}")
     
-    # 1. 기존 메모리 조회
+    # 1. 기존 메모리 조회 (동기 - 빠른 DB 조회)
     existing_memory = db.query(UserMemory).filter(
         UserMemory.user_id == user_id
     ).order_by(UserMemory.updated_at.desc()).first()
@@ -150,22 +150,22 @@ def update_user_memory(
     
     existing_strategy = existing_memory.marketing_strategy if existing_memory else None
     
-    # 2. 대화에서 마케팅 전략 정보 추출
+    # 2. 대화에서 마케팅 전략 정보 추출 (비동기 - GPT API)
     print(f"🤖 GPT로 전략 정보 추출 시작...")
-    updated_strategy = extract_marketing_strategy_from_conversation(
+    updated_strategy = await extract_marketing_strategy_from_conversation(
         conversation_history,
         final_content,
         existing_strategy
     )
     print(f"✅ 추출된 전략: {json.dumps(updated_strategy, ensure_ascii=False)[:200]}...")
     
-    # 3. 임베딩 생성 (JSON 전체를 문자열로 변환)
+    # 3. 임베딩 생성 (비동기 - OpenAI API)
     print(f"🔢 임베딩 생성 중...")
     embedding_text = json.dumps(updated_strategy, ensure_ascii=False)
-    embedding = get_embedding(embedding_text)
+    embedding = await get_embedding(embedding_text)
     print(f"✅ 임베딩 생성 완료: {len(embedding) if embedding else 0}차원")
     
-    # 4. DB 저장/업데이트
+    # 4. DB 저장/업데이트 (동기 - 빠른 작업)
     if existing_memory:
         print(f"🔄 기존 메모리 업데이트...")
         existing_memory.marketing_strategy = updated_strategy

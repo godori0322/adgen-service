@@ -5,10 +5,11 @@
 import os
 import json
 import re  # 정규식 사용 목적
+import asyncio
 from typing import Optional, Dict
 from datetime import datetime
 from enum import Enum
-from openai import OpenAI
+from openai import AsyncOpenAI
 from langchain_openai import ChatOpenAI
 from langchain_classic.chains import ConversationChain
 from langchain_classic.memory import ConversationBufferWindowMemory
@@ -16,7 +17,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from backend.app.core.schemas import DialogueGPTResponse, FinalContentSchema
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ================== 대화 의도 분류 ==================
 
@@ -409,13 +410,13 @@ def _create_new_chain(user_context: dict = None, first_input: str = None) -> Con
     return chain
 
 
-def generate_conversation_response(
+async def generate_conversation_response(
     user_input: str,
     user_id: Optional[int] = None,
     user_context: dict = None
 ) -> DialogueGPTResponse:
     """
-    langchain 사용해서 multi-turn 대화 응답 생성
+    [비동기 버전] langchain 사용해서 multi-turn 대화 응답 생성
     
     Args:
         user_input: 사용자 입력
@@ -437,8 +438,10 @@ def generate_conversation_response(
             first_input=user_input if (is_new_session and user_id) else None
         )
         
-        # langchain 실행(메모리 자동 관리 & 프롬프트 주입)
-        raw_response = chain.invoke(input=user_input)['response'].strip()
+        # langchain 실행(메모리 자동 관리 & 프롬프트 주입) - asyncio.to_thread 사용
+        raw_response = await asyncio.to_thread(
+            lambda: chain.invoke(input=user_input)['response'].strip()
+        )
         
         # Pydantic 모델로 변환 & 유효성 검사
         data = _safe_json_from_text(raw_response)
@@ -471,9 +474,9 @@ def generate_conversation_response(
 
       
 # 단일 콘텐츠 생성
-def generate_marketing_idea(prompt_text: str, context=None) -> dict:
+async def generate_marketing_idea(prompt_text: str, context=None) -> dict:
     """
-    [기존 기능 유지] 단일 턴에서 마케팅 아이디어 생성하는 역할
+    [비동기 버전] 단일 턴에서 마케팅 아이디어 생성하는 역할
     - 마케팅 아이디어/캡션/해시태그/이미지 프롬프트 생성 역할
     - 출력 스키마를 JSON으로 강제 및 안전 파싱 역할
     """
@@ -508,7 +511,7 @@ def generate_marketing_idea(prompt_text: str, context=None) -> dict:
     try:
         # 3) Chat Completions 호출 역할
         #    - 가능 모델의 경우 JSON 강제 포맷 지정 역할
-        res = client.chat.completions.create(
+        res = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system},
@@ -553,23 +556,9 @@ def generate_marketing_idea(prompt_text: str, context=None) -> dict:
         # 8) 최종 예외 단일화 및 상위 레이어 전달 역할
         raise ValueError(f"GPT 생성 실패: {e}")
 
-        
-    # 도시명 변환(정규화)
-    match = re.search(r"\{[\s\S]*\}", content)
-    if match:
-        json_str = match.group()
-    else:
-        json_str = content
-
-    try:
-        result = json.loads(json_str)
-    except json.JSONDecodeError:
-        result = {"idea": content, "caption": content, "hashtags": [], "image_prompt": ""}
-    return result
-
-def extract_city_name_english(location: str) -> str:
+async def extract_city_name_english(location: str) -> str:
     """
-    한글 지역명을 GPT를 사용하여 영어 도시명으로 변환
+    [비동기 버전] 한글 지역명을 GPT를 사용하여 영어 도시명으로 변환
     예: "서울 강남구" -> "Seoul"
         "부산광역시 해운대구" -> "Busan"
     """
@@ -592,7 +581,7 @@ def extract_city_name_english(location: str) -> str:
         출력 형식: 영어 도시명 (예: Seoul, Busan, Incheon)
         """
         
-        res = client.chat.completions.create(
+        res = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,  # 낮은 temperature로 일관된 결과
