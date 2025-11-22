@@ -15,7 +15,7 @@ from langchain_classic.chains import ConversationChain
 from langchain_classic.memory import ConversationBufferWindowMemory
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
-from backend.app.core.schemas import DialogueGPTResponse, FinalContentSchema
+from backend.app.core.schemas import DialogueGPTResponse_AD, DialogueGPTResponse_Profile, FinalContentSchema
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -68,7 +68,8 @@ def classify_user_intent(user_input: str, has_complete_profile: bool) -> Convers
 
 # langchain 변수 정의
 MAX_MEMORY_TURNS = 10
-parser = PydanticOutputParser(pydantic_object=DialogueGPTResponse)
+parser_ad = PydanticOutputParser(pydantic_object=DialogueGPTResponse_AD)
+parser_profile = PydanticOutputParser(pydantic_object=DialogueGPTResponse_Profile)
 
 # 사용자별 대화 세션 저장 (user_id -> {chain, last_access})
 CONVERSATION_MEMORIES: Dict[str, Dict] = {}
@@ -107,7 +108,9 @@ PROFILE_BUILDING_TEMPLATE = """
 - 한 번에 하나씩만 질문하세요 (여러 질문 동시 금지)
 - 자연스럽고 친근한 대화 톤 유지
 - 사용자가 답변하기 쉽게 예시나 선택지 제공
-- 위 4가지 정보 수집 완료 시 is_complete=true 설정
+- 위 4가지 정보 수집 완료 시:
+  * is_complete: true
+  * last_ment: "위의 대화를 반영하겠습니다" 
 - 기본 정보(업종, 위치, 메뉴 등)는 절대 다시 묻지 마세요
 
 === 현재 대화 ===
@@ -132,7 +135,11 @@ INFO_UPDATE_TEMPLATE = """
 
 === 대화 목표 ===
 사용자가 제공한 새로운 정보를 반영하여 마케팅 전략 정보를 업데이트하세요.
-(이 프롬프트는 향후 구현 예정)
+
+=== 중요 규칙 ===
+- 정보 업데이트 완료 시:
+  * is_complete: true
+  * last_ment: "위의 대화를 반영하겠습니다" 
 
 === 현재 대화 ===
 {history}
@@ -280,13 +287,18 @@ def _get_or_create_chain(
     
     if session_key not in CONVERSATION_MEMORIES:
         # 첫 대화: 새 체인 생성 (의도 분류 포함)
+        has_complete_profile = _check_profile_completeness(user_context)
+        intent = classify_user_intent(first_input, has_complete_profile) if first_input else (
+            ConversationIntent.PROFILE_BUILDING if not has_complete_profile else ConversationIntent.AD_GENERATION
+        )
         chain = _create_new_chain(user_context, first_input)
         CONVERSATION_MEMORIES[session_key] = {
             "chain": chain,
             "user_context": user_context,
+            "intent": intent,
             "last_access": datetime.now()
         }
-        print(f"✅ 새 대화 세션 생성: {session_key}")
+        print(f"✅ 새 대화 세션 생성: {session_key} (의도: {intent.value})")
         return chain, user_context
     else:
         # 기존 대화: 저장된 체인 재사용
@@ -372,6 +384,9 @@ def _create_new_chain(user_context: dict = None, first_input: str = None) -> Con
     # 마케팅 전략 정보 포맷팅
     strategy_text = _format_strategy_info(user_context.get("memory") if user_context else None)
     
+    # 의도에 맞는 parser 선택
+    selected_parser = parser_ad if intent == ConversationIntent.AD_GENERATION else parser_profile
+    
     # LangChain LLM 설정
     llm = ChatOpenAI(
         model="gpt-4o", 
@@ -390,7 +405,7 @@ def _create_new_chain(user_context: dict = None, first_input: str = None) -> Con
         template=template,
         input_variables=["input"],
         partial_variables={
-            "format_instructions": parser.get_format_instructions(),
+            "format_instructions": selected_parser.get_format_instructions(),
             "business_type": user_context.get("business_type", "미확인") if user_context else "미확인",
             "location": user_context.get("location", "미확인") if user_context else "미확인",
             "menu_items": user_context.get("menu_items", "미확인") if user_context else "미확인",
@@ -414,7 +429,7 @@ async def generate_conversation_response(
     user_input: str,
     user_id: Optional[int] = None,
     user_context: dict = None
-) -> DialogueGPTResponse:
+) -> DialogueGPTResponse_AD | DialogueGPTResponse_Profile:
     """
     [비동기 버전] langchain 사용해서 multi-turn 대화 응답 생성
     
@@ -443,9 +458,21 @@ async def generate_conversation_response(
             lambda: chain.invoke(input=user_input)['response'].strip()
         )
         
-        # Pydantic 모델로 변환 & 유효성 검사
+        # 의도 가져오기
+        session = CONVERSATION_MEMORIES.get(session_key)
+        intent = session.get("intent") if session else ConversationIntent.AD_GENERATION
+        
+        # Pydantic 모델로 변환 (이미 parser가 올바른 타입으로 파싱함)
         data = _safe_json_from_text(raw_response)
-        response = DialogueGPTResponse(**data)
+        
+        if intent == ConversationIntent.AD_GENERATION:
+            response = DialogueGPTResponse_AD(**data)
+        else:
+            # PROFILE_BUILDING, INFO_UPDATE, ANALYSIS
+            # GPT가 last_ment를 안 보내면 강제 주입
+            if data.get("is_complete") and not data.get("last_ment"):
+                data["last_ment"] = "위의 대화를 반영하겠습니다"
+            response = DialogueGPTResponse_Profile(**data)
         
         # 대화 완료 시: 세션 삭제 전 대화 기록 추출
         if response.is_complete:

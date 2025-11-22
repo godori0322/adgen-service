@@ -2,7 +2,7 @@
 # 데이터베이스 초기화 스크립트
 
 from backend.app.core.database import engine, Base
-from backend.app.core.models import User, AdRequest
+from backend.app.core.models import User, AdRequest, UserMemory
 
 def init_db():
     """데이터베이스 테이블 생성"""

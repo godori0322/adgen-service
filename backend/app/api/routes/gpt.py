@@ -10,7 +10,7 @@ import json
 from backend.app.services.gpt_service import generate_marketing_idea
 # 추가
 from backend.app.services.gpt_service import generate_conversation_response, CONVERSATION_MEMORIES
-from backend.app.core.schemas import GPTRequest, GPTResponse, DialogueGPTResponse, FinalContentSchema
+from backend.app.core.schemas import GPTRequest, GPTResponse, DialogueGPTResponse_AD, DialogueGPTResponse_Profile, FinalContentSchema
 from backend.app.core.database import get_db
 from backend.app.services import auth_service, memory_service
 
@@ -97,14 +97,20 @@ async def handle_marketing_dialog(
         )
         
         # 5. 대화 완료 시 메모리 업데이트 (로그인 사용자만)
-        if response.is_complete and response.final_content and current_user:
+        # 모든 대화 타입(PROFILE_BUILDING, INFO_UPDATE, AD_GENERATION)에서 메모리 업데이트
+        if response.is_complete and current_user:
             try:
+                # final_content가 있으면 포함, 없으면 None 전달
+                final_content_dict = None
+                if hasattr(response, 'final_content') and response.final_content:
+                    final_content_dict = response.final_content.dict()
+                
                 # 장기 메모리 업데이트 (비동기 - GPT API + 임베딩)
                 await memory_service.update_user_memory(
                     db=db,
                     user_id=current_user.id,
                     conversation_history=response.conversation_history,
-                    final_content=response.final_content.dict()
+                    final_content=final_content_dict
                 )
                 print(f"✅ 장기 메모리 업데이트 완료 (JSON 형식)")
                 
@@ -112,12 +118,20 @@ async def handle_marketing_dialog(
                 print(f"⚠️ 메모리 업데이트 실패 (비치명적): {mem_err}")
                 # 메모리 업데이트 실패해도 응답은 반환
         
-        # 6. 응답 반환
-        return {
+        # 6. 응답 반환 - 타입에 따라 다르게 처리
+        result = {
             "is_complete": response.is_complete,
             "next_question": response.next_question,
-            "final_content": response.final_content.dict() if response.final_content else None
         }
+        
+        # DialogueGPTResponse_AD인 경우
+        if hasattr(response, 'final_content'):
+            result["final_content"] = response.final_content.dict() if response.final_content else None
+        # DialogueGPTResponse_Profile인 경우
+        if hasattr(response, 'last_ment'):
+            result["last_ment"] = response.last_ment
+        
+        return result
     
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"GPT 응답 서비스 오류: {e}")

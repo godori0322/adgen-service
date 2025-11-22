@@ -34,7 +34,7 @@ def get_user_memory(db: Session, user_id: int) -> Optional[UserMemory]:
 
 async def extract_marketing_strategy_from_conversation(
     conversation_history: List[dict],
-    final_content: dict,
+    final_content: Optional[dict] = None,
     existing_strategy: dict = None
 ) -> dict:
     """
@@ -42,7 +42,7 @@ async def extract_marketing_strategy_from_conversation(
     
     Args:
         conversation_history: 전체 대화 기록
-        final_content: 최종 생성된 콘텐츠
+        final_content: 최종 생성된 콘텐츠 (Optional)
         existing_strategy: 기존 전략 정보
         
     Returns:
@@ -53,6 +53,12 @@ async def extract_marketing_strategy_from_conversation(
         for msg in conversation_history
     ])
     
+    # final_content가 있으면 포함, 없으면 생략
+    final_content_text = f"""
+최종 콘텐츠:
+{json.dumps(final_content, ensure_ascii=False)}
+""" if final_content else ""
+    
     prompt = f"""
 다음 대화에서 마케팅 전략 정보를 추출하여 JSON 형식으로 반환하세요.
 
@@ -61,9 +67,7 @@ async def extract_marketing_strategy_from_conversation(
 
 대화 기록:
 {conversation_text}
-
-최종 콘텐츠:
-{json.dumps(final_content, ensure_ascii=False)}
+{final_content_text}
 
 다음 JSON 형식으로 출력하세요 (대화에서 언급되지 않은 필드는 null):
 {{
@@ -125,7 +129,7 @@ async def update_user_memory(
     db: Session, 
     user_id: int, 
     conversation_history: List[dict],
-    final_content: dict
+    final_content: Optional[dict] = None
 ) -> UserMemory:
     """
     [비동기] 대화 기록에서 마케팅 전략 정보를 추출하여 JSON 형식으로 저장
@@ -134,7 +138,7 @@ async def update_user_memory(
         db: 데이터베이스 세션
         user_id: 사용자 ID
         conversation_history: 전체 대화 기록
-        final_content: 최종 생성된 콘텐츠
+        final_content: 최종 생성된 콘텐츠 (Optional)
     
     Returns:
         업데이트된 UserMemory 객체
