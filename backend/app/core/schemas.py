@@ -46,9 +46,8 @@ class GPTResponse(BaseResponse):
 class AdGenerateResponse(GPTResponse):
     image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
 
-class DiffusionRequest(BaseModel):
-    prompt: str = Field(..., description="이미지 생성용 프롬프트")
-    product_image: Optional[str] = Field(None, description="제품 사진 (base64 인코딩), 배경과 합성용")
+# DiffusionRequest는 multipart/form-data로 받으므로 스키마 불필요
+# 실제 엔드포인트에서는 Form()과 File()을 사용합니다.
 
 class DiffusionResponse(BaseResponse):
     image_url: Optional[str] = Field(None, description="생성된 이미지 URL")
