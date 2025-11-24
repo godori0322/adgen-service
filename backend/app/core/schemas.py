@@ -3,7 +3,7 @@
 
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 
 # 기본 응답구조
 class BaseResponse(BaseModel):
@@ -48,6 +48,7 @@ class AdGenerateResponse(GPTResponse):
 
 class DiffusionRequest(BaseModel):
     prompt: str = Field(..., description="이미지 생성용 프롬프트")
+    product_image: Optional[str] = Field(None, description="제품 사진 (base64 인코딩), 배경과 합성용")
 
 class DiffusionResponse(BaseResponse):
     image_url: Optional[str] = Field(None, description="생성된 이미지 URL")
@@ -77,6 +78,7 @@ class FinalContentSchema(BaseModel):
 
 # 광고 생성용 GPT 응답 스키마
 class DialogueGPTResponse_AD(BaseModel):
+    type: Literal["ad"] = Field(default="ad", description="응답 타입 (고정값: ad)")
     is_complete: bool = Field(..., description="정보 수집 완료 여부. True면 대화 종료.")
     next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
     final_content: Optional[FinalContentSchema] = Field(None, description="수집 완료 후 GPT가 생성한 최종 콘텐츠")
@@ -84,6 +86,7 @@ class DialogueGPTResponse_AD(BaseModel):
 
 # 프로필/정보 업데이트용 GPT 응답 스키마
 class DialogueGPTResponse_Profile(BaseModel):
+    type: Literal["profile"] = Field(default="profile", description="응답 타입 (고정값: profile)")
     is_complete: bool = Field(..., description="정보 수집 완료 여부. True면 대화 종료.")
     next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
     last_ment: Optional[str] = Field(None, description="PROFILE_BUILDING/INFO_UPDATE 완료 시 표시할 확인 메시지")

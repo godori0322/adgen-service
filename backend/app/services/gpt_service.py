@@ -112,6 +112,7 @@ PROFILE_BUILDING_TEMPLATE = """
   * is_complete: true
   * last_ment: "위의 대화를 반영하겠습니다" 
 - 기본 정보(업종, 위치, 메뉴 등)는 절대 다시 묻지 마세요
+- 같은 내용의 질문을 절대 3번 이상 반복하지 마세요
 
 === 현재 대화 ===
 {history}

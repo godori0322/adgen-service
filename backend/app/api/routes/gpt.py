@@ -120,6 +120,7 @@ async def handle_marketing_dialog(
         
         # 6. 응답 반환 - 타입에 따라 다르게 처리
         result = {
+            "type": response.type,  # type 필드 추가
             "is_complete": response.is_complete,
             "next_question": response.next_question,
         }
