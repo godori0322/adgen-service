@@ -56,12 +56,16 @@ export function useVoiceChat() {
         );
         return;
       }
-      const formatted = formatChatResponse(adRes.final_content);
+      const formatted = adRes.final_content
+        ? formatChatResponse(adRes.final_content)
+        : adRes.last_ment ?? "";
       setMessages((prev) =>
         prev.map((m) => (m.tempId === assistantTempId ? { ...m, content: formatted } : m))
       );
-      if (adRes.final_content.image_prompt) {
-        console.log(adRes.final_content.image_prompt);
+      const imagePrompt =
+        adRes.final_content?.image_prompt ?? adRes.final_content?.img_prompt ?? null;
+
+      if (imagePrompt) {
         const imgTempId = Date.now() + 2;
 
         // 이미지 생성 중 메시지 추가
