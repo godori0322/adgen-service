@@ -25,3 +25,22 @@
   font-weight: 700;
   font-display: swap;
 }
+
+@layer utilities {
+  .animate-slide-up {
+    animation: slideUp 0.25s ease-out;
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
