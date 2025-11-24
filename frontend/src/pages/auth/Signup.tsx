@@ -4,6 +4,7 @@ import { registerRequest } from "../../api/auth";
 import Button from "../../components/common/Button";
 import TextInput from "../../components/common/TextInput";
 import { PageTitle } from "../../components/common/Title";
+import TimePicker from "../../components/common/TimePicker";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -178,32 +179,17 @@ export default function SignupPage() {
             onChange={handleChange}
           />
           <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-sm font-medium text-gray-600">오픈시간</label>
-              <input
-                type="time"
-                id="openTime"
-                value={form.openTime}
-                onChange={handleChange}
-                onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-                step="60"
-                pattern="[0-9]{2}:[0-9]{2}"
-                className="w-full mt-1 px-3 py-2 border rounded-lg"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-sm font-medium text-gray-600">마감시간</label>
-              <input
-                type="time"
-                id="closeTime"
-                value={form.closeTime}
-                onChange={handleChange}
-                onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-                step="60"
-                pattern="[0-9]{2}:[0-9]{2}"
-                className="w-full mt-1 px-3 py-2 border rounded-lg"
-              />
-            </div>
+            <TimePicker
+              label="오픈시간"
+              value={form.openTime}
+              onChange={(v) => setForm((prev) => ({ ...prev, openTime: v }))}
+            />
+
+            <TimePicker
+              label="마감시간"
+              value={form.closeTime}
+              onChange={(v) => setForm((prev) => ({ ...prev, closeTime: v }))}
+            />
           </div>
           <div>
             <label className="text-sm font-medium text-gray-600">메뉴 리스트</label>

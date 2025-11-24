@@ -1,3 +1,4 @@
+import TimePicker from "../common/TimePicker";
 
 interface ProfileRowProps {
   label: string;
@@ -13,25 +14,21 @@ export default function HourRow({ label, openTime, closeTime, editMode, onChange
       <span className="text-gray-600 w-24">{label}</span>
       {editMode ? (
         <>
-          <input
-            type="time"
-            value={openTime}
-            onChange={(e) => onChange("openTime", e.target.value)}
-            onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-            step="60"
-            pattern="[0-9{2}:[0-9]{2}"
-            className="flex-1 mt-1 px-3 py-2 border rounded-lg"
-          />
-          <span>~</span>
-          <input
-            type="time"
-            value={closeTime}
-            onChange={(e) => onChange("closeTime", e.target.value)}
-            onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-            step="60"
-            pattern="[0-9{2}:[0-9]{2}"
-            className="flex-1 mt-1 px-3 py-2 border rounded-lg"
-          />
+          <div className="flex-1">
+            <TimePicker
+              label="오픈시간"
+              value={openTime}
+              onChange={(v) => onChange("openTime", v)}
+            />
+          </div>
+
+          <div className="flex-1">
+            <TimePicker
+              label="마감시간"
+              value={closeTime}
+              onChange={(v) => onChange("closeTime", v)}
+            />
+          </div>
         </>
       ) : (
         <span className="font-medium flex-1">
