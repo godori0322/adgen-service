@@ -25,10 +25,7 @@ def _get_segmentation_model() -> ProductSegmentation:
     global _segmentation_model
     if _segmentation_model is None:
         try:
-            _segmentation_model = ProductSegmentation(
-                model_type="vit_t",
-                checkpoint_path="backend/weights/mobile_sam.pt",
-            )
+            _segmentation_model = ProductSegmentation()
             print("[Segmentation] MobileSAM 로드 완료.")
         except Exception as exc:
             print(f"[Segmentation][ERROR] 모델 로드 실패: {exc}")
