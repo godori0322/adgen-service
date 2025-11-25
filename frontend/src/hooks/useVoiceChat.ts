@@ -15,7 +15,9 @@ export function useVoiceChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const { startDots, stopDots } = useDotsAnimation(setMessages);
   const [needImage, setNeedImage] = useState(false);
-  const [adImageUploaded, setAdImageUploaded] = useState(false);
+  // const [adImageUploaded, setAdImageUploaded] = useState(false);
+  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
+
 
   const pendingQuestionRef = useRef<string | null>(null);
 
@@ -54,7 +56,7 @@ export function useVoiceChat() {
       stopDots();
       if (!adRes.is_complete) {
         // 3-1. 광고 생성  - 이미지 요청
-        if (adRes.type === "ad" && !adImageUploaded) {
+        if (adRes.type === "ad" && !uploadedImageFile) {
           pendingQuestionRef.current = adRes.next_question;
           setNeedImage(true);
 
@@ -89,24 +91,23 @@ export function useVoiceChat() {
 
       if (imagePrompt) {
         const imgTempId = Date.now() + 2;
-
         // 이미지 생성 중 메시지 추가
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: "🖼️ 이미지 생성 중입니다...", tempId: imgTempId },
         ]);
 
-        const imgSrc = await generateDiffusionRequest(adRes.final_content.image_prompt);
+        if(!uploadedImageFile) return;
+        const imgSrc = await generateDiffusionRequest(imagePrompt, uploadedImageFile);
 
         // 이미지 채우기
         setMessages((prev) =>
           prev.map((m) => (m.tempId === imgTempId ? { ...m, content: "", img: imgSrc } : m))
         );
 
-        if (adRes.is_complete) setAdImageUploaded(false);
       }
+      if (adRes.is_complete) setUploadedImageFile(null);
     } catch (err: any) {
-      console.error("오류:", err.message);
       const content = `❌ 오류 발생가 발생하였습니다. 다시 시도 부탁드립니다.`;
       setMessages((prev) => {
         if (prev.length === 0) {
@@ -122,8 +123,9 @@ export function useVoiceChat() {
   // 6. 이미지 업로드 처리
   const onImageUpload = async (file: File) => {
     const imgUrl = URL.createObjectURL(file);
+    setUploadedImageFile(file);
     setNeedImage(false);
-    setAdImageUploaded(true);
+    // setAdImageUploaded(true);
     const cleaned = pendingQuestionRef.current!.trim();
     setMessages((prev) => [...prev, { role: "user", content: "", img: imgUrl }]);
     if (pendingQuestionRef.current!) {
