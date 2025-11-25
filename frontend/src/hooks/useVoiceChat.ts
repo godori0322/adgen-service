@@ -4,6 +4,7 @@ import { formatChatResponse } from "../utils/chatFormatter";
 import { useDotsAnimation } from "./useDotsAnimation";
 import { useWhisper } from "./useWhisper";
 import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
+import { useAuth } from "../context/AuthContext";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -13,6 +14,7 @@ interface ChatMessage {
 }
 
 export function useVoiceChat() {
+  const {isLogin} = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const { startDots, stopDots } = useDotsAnimation(setMessages);
   const [needImage, setNeedImage] = useState(false);
@@ -51,7 +53,8 @@ export function useVoiceChat() {
       startDots(assistantTempId);
 
       // 3. 멀티턴 대화 모드
-      const adRes = await generateDialogueRequest(userText);
+
+      const adRes = await generateDialogueRequest(userText, isLogin);
       stopDots();
       if (!adRes.is_complete) {
         // 3-1. 광고 생성  - 이미지 요청

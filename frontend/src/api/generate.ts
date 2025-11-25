@@ -1,3 +1,4 @@
+import { getGuestSessionId } from "../utils/guestSession";
 import { httpPost, httpPostForm, httpPostImg } from "./http";
 
 export async function whisperTranscribeRequest(file: File) {
@@ -17,8 +18,11 @@ export async function generateRequest(text: string, context: string | null = nul
   return adRes;
 }
 
-export async function generateDialogueRequest(userInput: string) {
-  const body = { user_input: userInput };
+export async function generateDialogueRequest(userInput: string, isLogin: boolean) {
+  const body:any = { user_input: userInput };
+  if(!isLogin) {
+    body.guest_session_id = getGuestSessionId();
+  }
   return await httpPost("/gpt/dialogue", body);
 }
 
