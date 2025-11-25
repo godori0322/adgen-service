@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { ReactMediaRecorder } from "react-media-recorder";
 
-export default function VoiceRecorder({ onAudioSend }: { onAudioSend: (b: Blob) => void }) {
+export default function VoiceRecorder({
+  onAudioSend,
+  disabled,
+}: {
+  onAudioSend: (b: Blob) => void;
+  disabled: boolean;
+}) {
   const [audioURL, setAudioURL] = useState<string | null>(null);
 
   return (
@@ -30,6 +36,7 @@ export default function VoiceRecorder({ onAudioSend }: { onAudioSend: (b: Blob) 
             {status !== "recording" && (
               <button
                 onClick={startRecording}
+                disabled={disabled}
                 className="
                   w-20 h-20 rounded-full 
                   bg-blue-500 text-white text-3xl

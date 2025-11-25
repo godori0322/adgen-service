@@ -15,6 +15,7 @@ interface ChatMessage {
 
 export function useVoiceChat() {
   const { isLogin } = useAuth();
+  const [isWorking, setIsWorking] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const { startDots, stopDots } = useDotsAnimation(setMessages);
   const [needImage, setNeedImage] = useState(false);
@@ -28,6 +29,8 @@ export function useVoiceChat() {
   };
 
   const onAudioSend = async (audioBlob: Blob) => {
+
+    setIsWorking(true);
     // 너무 짧은 음성
     if (audioBlob.size < 10000) {
       setMessages((prev) => [
@@ -35,6 +38,7 @@ export function useVoiceChat() {
         { role: "user", content: "인식할 수 없습니다. 🎤" },
         { role: "assistant", content: "음성이 너무 짧아요! 조금 더 이야기해주세요 😊" },
       ]);
+      setIsWorking(false);
       return;
     }
     try {
@@ -126,6 +130,8 @@ export function useVoiceChat() {
         return prev.map((m, idx) => (idx === lastIndex ? { ...m, content } : m));
       });
       stopDots();
+    } finally {
+      setIsWorking(false);
     }
   };
 
@@ -150,5 +156,5 @@ export function useVoiceChat() {
     return;
   };
 
-  return { messages, needImage, onAudioSend, onImageUpload };
+  return { messages, needImage, isWorking, onAudioSend, onImageUpload };
 }
