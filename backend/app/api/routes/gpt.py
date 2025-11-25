@@ -17,7 +17,7 @@ from backend.app.services import auth_service, memory_service
 # new 요청 스키마
 class DialogueRequest(BaseModel):
     user_input: str = Field(..., description="사용자가 입력한 대화 내용")
-    # session_id 제거: 서버에서 자동 생성
+    guest_session_id: Optional[str] = Field(None, description="비로그인 사용자 세션 ID (프론트엔드 생성)")
 
 router = APIRouter(prefix="/gpt", tags=["GPT"])
 security = HTTPBearer(auto_error=False)
@@ -59,9 +59,17 @@ async def handle_marketing_dialog(
         token = credentials.credentials if credentials else None
         current_user = auth_service.get_user_from_token(db, token)
         
-        # 2. 세션 존재 여부 확인
-        session_key = f"user-{current_user.id}" if current_user else None
-        session_exists = session_key and session_key in CONVERSATION_MEMORIES
+        # 2. 세션 키 결정
+        if current_user:
+            session_key = f"user-{current_user.id}"
+            is_guest = False
+        elif request.guest_session_id:
+            session_key = f"guest-{request.guest_session_id}"
+            is_guest = True
+        else:
+            raise HTTPException(status_code=400, detail="로그인하거나 guest_session_id를 제공하세요")
+        
+        session_exists = session_key in CONVERSATION_MEMORIES
         
         # 3. 사용자 컨텍스트 구성 (첫 요청에만 DB 쿼리)
         user_context = None
@@ -86,37 +94,46 @@ async def handle_marketing_dialog(
                 "memory": long_term_memory  # 장기 메모리 추가
             }
             print(f"📊 첫 대화: 사용자 컨텍스트 조회 완료 (user_id={current_user.id})")
-        elif session_exists:
+        elif session_exists and current_user:
             print(f"⚡ 세션 재사용: DB 쿼리 스킵 (user_id={current_user.id})")
+        elif session_exists and is_guest:
+            print(f"⚡ 게스트 세션 재사용: {session_key}")
         
         # 4. 대화 진행 (세션 재사용 시 캐싱된 컨텍스트 사용)
         response = await generate_conversation_response(
             user_input=request.user_input,
-            user_id=current_user.id if current_user else None,
+            session_key=session_key,
+            is_guest=is_guest,
             user_context=user_context  # 첫 요청: 딕셔너리, 이후: None (세션에서 재사용)
         )
         
-        # 5. 대화 완료 시 메모리 업데이트 (로그인 사용자만)
-        # 모든 대화 타입(PROFILE_BUILDING, INFO_UPDATE, AD_GENERATION)에서 메모리 업데이트
-        if response.is_complete and current_user:
-            try:
-                # final_content가 있으면 포함, 없으면 None 전달
-                final_content_dict = None
-                if hasattr(response, 'final_content') and response.final_content:
-                    final_content_dict = response.final_content.dict()
-                
-                # 장기 메모리 업데이트 (비동기 - GPT API + 임베딩)
-                await memory_service.update_user_memory(
-                    db=db,
-                    user_id=current_user.id,
-                    conversation_history=response.conversation_history,
-                    final_content=final_content_dict
-                )
-                print(f"✅ 장기 메모리 업데이트 완료 (JSON 형식)")
-                
-            except Exception as mem_err:
-                print(f"⚠️ 메모리 업데이트 실패 (비치명적): {mem_err}")
-                # 메모리 업데이트 실패해도 응답은 반환
+        # 5. 대화 완료 시 처리
+        if response.is_complete:
+            # 세션 삭제
+            if session_key in CONVERSATION_MEMORIES:
+                del CONVERSATION_MEMORIES[session_key]
+                print(f"🗑️  대화 완료, 세션 삭제: {session_key}")
+            
+            # 로그인 사용자만 메모리 업데이트
+            if current_user:
+                try:
+                    # final_content가 있으면 포함, 없으면 None 전달
+                    final_content_dict = None
+                    if hasattr(response, 'final_content') and response.final_content:
+                        final_content_dict = response.final_content.dict()
+                    
+                    # 장기 메모리 업데이트 (비동기 - GPT API + 임베딩)
+                    await memory_service.update_user_memory(
+                        db=db,
+                        user_id=current_user.id,
+                        conversation_history=response.conversation_history,
+                        final_content=final_content_dict
+                    )
+                    print(f"✅ 장기 메모리 업데이트 완료 (JSON 형식)")
+                    
+                except Exception as mem_err:
+                    print(f"⚠️ 메모리 업데이트 실패 (비치명적): {mem_err}")
+                    # 메모리 업데이트 실패해도 응답은 반환
         
         # 6. 응답 반환 - 타입에 따라 다르게 처리
         result = {
