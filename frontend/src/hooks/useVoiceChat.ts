@@ -3,6 +3,7 @@ import { generateDialogueRequest, generateDiffusionRequest } from "../api/genera
 import { formatChatResponse } from "../utils/chatFormatter";
 import { useDotsAnimation } from "./useDotsAnimation";
 import { useWhisper } from "./useWhisper";
+import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -15,9 +16,7 @@ export function useVoiceChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const { startDots, stopDots } = useDotsAnimation(setMessages);
   const [needImage, setNeedImage] = useState(false);
-  // const [adImageUploaded, setAdImageUploaded] = useState(false);
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
-
 
   const pendingQuestionRef = useRef<string | null>(null);
 
@@ -62,7 +61,7 @@ export function useVoiceChat() {
 
           setMessages((prev) =>
             prev.map((m) =>
-              m.tempId === assistantTempId ? { ...m, content: "🖼️ 먼저 이미지를 추가해주세요!" } : m
+              m.tempId === assistantTempId ? { ...m, content: IMAGE_GUIDE_MESSAGE } : m
             )
           );
           return;
