@@ -1,7 +1,17 @@
 # main.py
 
-from dotenv import load_dotenv
+# 캐시파일 /home/shared/models 하위로 설정
+import os
+# Hugging Face / Diffusers / Transformers 캐시를 공용 디렉토리로 지정
+CACHE_DIR = "/home/shared/models"
+for key in [
+            "HF_HOME","TRANSFORMERS_CACHE",
+            "DIFFUSERS_CACHE", "HUGGINGFACE_HUB_CACHE", "TORCH_HOME"]:
+    os.environ[key] = CACHE_DIR
 
+
+# .env 로드(기존코드 동일)
+from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI
