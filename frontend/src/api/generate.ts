@@ -34,3 +34,11 @@ export async function generateDiffusionRequest(prompt: string, img: File) {
   const imgSrc = URL.createObjectURL(result);
   return imgSrc;
 }
+
+export async function uploadImage(sessionKey: string, img: File) {
+  const form = new FormData();
+  form.append("session_key", sessionKey);
+  form.append("product_image", img);
+
+  await httpPostForm("/gpt/dialogue/upload-image", form);
+}

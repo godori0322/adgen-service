@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
-import { generateDialogueRequest, generateDiffusionRequest } from "../api/generate";
+import { generateDialogueRequest, generateDiffusionRequest, uploadImage } from "../api/generate";
+import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
+import { useAuth } from "../context/AuthContext";
 import { formatChatResponse } from "../utils/chatFormatter";
 import { useDotsAnimation } from "./useDotsAnimation";
 import { useWhisper } from "./useWhisper";
-import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
-import { useAuth } from "../context/AuthContext";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -14,13 +14,18 @@ interface ChatMessage {
 }
 
 export function useVoiceChat() {
-  const {isLogin} = useAuth();
+  const { isLogin } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const { startDots, stopDots } = useDotsAnimation(setMessages);
   const [needImage, setNeedImage] = useState(false);
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
-
   const pendingQuestionRef = useRef<string | null>(null);
+  const sessionKeyRef = useRef<string | null>(null);
+
+  // 세션키 업데이트
+  const updateSessionKey = (key: string) => {
+    sessionKeyRef.current = key;
+  };
 
   const onAudioSend = async (audioBlob: Blob) => {
     // 너무 짧은 음성
@@ -56,6 +61,9 @@ export function useVoiceChat() {
 
       const adRes = await generateDialogueRequest(userText, isLogin);
       stopDots();
+      if (sessionKeyRef.current !== adRes.session_key) {
+        updateSessionKey(adRes.session_key);
+      }
       if (!adRes.is_complete) {
         // 3-1. 광고 생성  - 이미지 요청
         if (adRes.type === "ad" && !uploadedImageFile) {
@@ -99,14 +107,13 @@ export function useVoiceChat() {
           { role: "assistant", content: "🖼️ 이미지 생성 중입니다...", tempId: imgTempId },
         ]);
 
-        if(!uploadedImageFile) return;
+        if (!uploadedImageFile) return;
         const imgSrc = await generateDiffusionRequest(imagePrompt, uploadedImageFile);
 
         // 이미지 채우기
         setMessages((prev) =>
           prev.map((m) => (m.tempId === imgTempId ? { ...m, content: "", img: imgSrc } : m))
         );
-
       }
       if (adRes.is_complete) setUploadedImageFile(null);
     } catch (err: any) {
@@ -128,6 +135,12 @@ export function useVoiceChat() {
     setUploadedImageFile(file);
     setNeedImage(false);
     // setAdImageUploaded(true);
+
+    // 이미지 전송
+    const key = sessionKeyRef.current;
+    if (!key) return;
+    await uploadImage(key, file);
+
     const cleaned = pendingQuestionRef.current!.trim();
     setMessages((prev) => [...prev, { role: "user", content: "", img: imgUrl }]);
     if (pendingQuestionRef.current!) {
