@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from PIL import Image
 
 from backend.app.services.diffusion_service import synthesize_image
-from backend.app.services.segmentation import MobileSAMSegmentation
+from backend.app.services.segmentation import ProductSegmentation
 # 스키마 Import 경로와 이름을 사용자가 제공한 내용에 맞춰 수정
 # 경로는 'backend.app.core.schemas'에 있다고 가정하고, 스키마 이름은 'DiffusionControlRequest/Response' 사용
 from backend.app.core.schemas import DiffusionControlRequest, DiffusionControlResponse, DiffusionAutoRequest 
@@ -19,13 +19,13 @@ router = APIRouter(prefix="/diffusion", tags=["Diffusion"])
 # ------------------------------------------------------------------------------
 # 전역 세그멘테이션 모델 (lazy load)
 # ------------------------------------------------------------------------------
-_segmentation_model: Optional[MobileSAMSegmentation] = None
+_segmentation_model: Optional[ProductSegmentation] = None
 
-def _get_segmentation_model() -> MobileSAMSegmentation:
+def _get_segmentation_model() -> ProductSegmentation:
     global _segmentation_model
     if _segmentation_model is None:
         try:
-            _segmentation_model = MobileSAMSegmentation(
+            _segmentation_model = ProductSegmentation(
                 model_type="vit_t",
                 checkpoint_path="backend/weights/mobile_sam.pt",
             )
