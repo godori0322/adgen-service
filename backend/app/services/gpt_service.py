@@ -15,7 +15,7 @@ from langchain_classic.chains import ConversationChain
 from langchain_classic.memory import ConversationBufferWindowMemory
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
-from backend.app.core.schemas import DialogueGPTResponse, FinalContentSchema
+from backend.app.core.schemas import DialogueGPTResponse_AD, DialogueGPTResponse_Profile, FinalContentSchema
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -23,7 +23,8 @@ client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 class ConversationIntent(str, Enum):
     """대화 의도 분류"""
-    PROFILE_BUILDING = "profile_building"  # 첫 대화: 마케팅 전략 정보 수집
+    PROFILE_BUILDING = "profile_building"  # 첫 대화: 마케팅 전략 정보 수집 (로그인)
+    GUEST_PROFILE = "guest_profile"  # 첫 대화: 축약 프로필 수집 (비로그인)
     INFO_UPDATE = "info_update"  # 정보 업데이트
     AD_GENERATION = "ad_generation"  # 광고 생성
     ANALYSIS = "analysis"  # 분석/조언
@@ -68,7 +69,8 @@ def classify_user_intent(user_input: str, has_complete_profile: bool) -> Convers
 
 # langchain 변수 정의
 MAX_MEMORY_TURNS = 10
-parser = PydanticOutputParser(pydantic_object=DialogueGPTResponse)
+parser_ad = PydanticOutputParser(pydantic_object=DialogueGPTResponse_AD)
+parser_profile = PydanticOutputParser(pydantic_object=DialogueGPTResponse_Profile)
 
 # 사용자별 대화 세션 저장 (user_id -> {chain, last_access})
 CONVERSATION_MEMORIES: Dict[str, Dict] = {}
@@ -95,7 +97,7 @@ PROFILE_BUILDING_TEMPLATE = """
    - 예: "주로 어떤 고객층이 많이 방문하시나요?"
    
 2. **차별화 포인트** (경쟁업체 대비 강점)
-   - 예: "주변 카페들과 비교했을 때 특별한 강점이 있으신가요?"
+   - 예: "주변 {business_type}들과 비교했을 때 특별한 강점이 있으신가요?"
    
 3. **브랜드 컨셉** (추구하는 이미지, 분위기)
    - 예: "어떤 분위기나 이미지를 추구하시나요?"
@@ -107,8 +109,11 @@ PROFILE_BUILDING_TEMPLATE = """
 - 한 번에 하나씩만 질문하세요 (여러 질문 동시 금지)
 - 자연스럽고 친근한 대화 톤 유지
 - 사용자가 답변하기 쉽게 예시나 선택지 제공
-- 위 4가지 정보 수집 완료 시 is_complete=true 설정
+- 위 4가지 정보 수집 완료 시:
+  * is_complete: true
+  * last_ment: "위의 대화를 반영하겠습니다" 
 - 기본 정보(업종, 위치, 메뉴 등)는 절대 다시 묻지 마세요
+- 같은 내용의 질문을 절대 3번 이상 반복하지 마세요
 
 === 현재 대화 ===
 {history}
@@ -119,7 +124,49 @@ PROFILE_BUILDING_TEMPLATE = """
 {format_instructions}
 """
 
-# 2️⃣ 정보 업데이트 프롬프트 (틀만)
+# 2️⃣ 비로그인 사용자 축약 프로필 수집 및 광고 생성 프롬프트
+GUEST_PROFILE_TEMPLATE = """
+당신은 친근한 마케팅 어시스턴트입니다.
+
+=== 대화 목표 ===
+비로그인 사용자를 위한 빠른 광고 생성 체험을 제공합니다.
+다음 3가지 정보를 수집한 후 즉시 광고를 생성하세요:
+
+1. **업종과 위치** (예: 서울 강남 카페, 부산 해운대 음식점)
+2. **사용자가 입력한 제품 사진의 설명** (예: 아메리카노, 라떼, 디저트)
+3. **타겟 고객** (예: 20대 직장인, 대학생, 30대 여성)
+
+=== 진행 단계 ===
+**1~2번째 질문**: 
+- 한 번에 하나씩 자연스럽게 질문
+- is_complete: false
+- next_question에 다음 질문 작성
+
+**3번째 질문 응답 받은 후**:
+- 수집된 정보를 바탕으로 **즉시 광고 생성**
+- is_complete: true
+- final_content에 광고 생성:
+  * idea: 마케팅 아이디어 (구체적이고 실행 가능한 아이디어)
+  * caption: 홍보 문구 (SNS 게시물용 매력적인 문구)
+  * hashtags: 해시태그 리스트 (5~7개, 관련성 높은 태그)
+  * image_prompt: 이미지 생성용 상세 프롬프트 (영어로 작성, Stable Diffusion용)
+
+=== 중요 규칙 ===
+- 3개 정보 수집 완료 시 **반드시 광고를 생성**하세요
+- 사용자 확인 없이 바로 생성 (빠른 체험 제공)
+- image_prompt는 영어로 상세하게 작성 (분위기, 색감, 구성 포함)
+- 간결하고 빠르게 진행
+
+=== 현재 대화 ===
+{history}
+
+사용자: {input}
+
+다음 JSON 형식으로 응답:
+{format_instructions}
+"""
+
+# 3️⃣ 정보 업데이트 프롬프트
 INFO_UPDATE_TEMPLATE = """
 당신은 소상공인 전담 마케팅 전문가입니다.
 
@@ -132,7 +179,11 @@ INFO_UPDATE_TEMPLATE = """
 
 === 대화 목표 ===
 사용자가 제공한 새로운 정보를 반영하여 마케팅 전략 정보를 업데이트하세요.
-(이 프롬프트는 향후 구현 예정)
+
+=== 중요 규칙 ===
+- 정보 업데이트 완료 시:
+  * is_complete: true
+  * last_ment: "위의 대화를 반영하겠습니다" 
 
 === 현재 대화 ===
 {history}
@@ -280,13 +331,18 @@ def _get_or_create_chain(
     
     if session_key not in CONVERSATION_MEMORIES:
         # 첫 대화: 새 체인 생성 (의도 분류 포함)
+        has_complete_profile = _check_profile_completeness(user_context)
+        intent = classify_user_intent(first_input, has_complete_profile) if first_input else (
+            ConversationIntent.PROFILE_BUILDING if not has_complete_profile else ConversationIntent.AD_GENERATION
+        )
         chain = _create_new_chain(user_context, first_input)
         CONVERSATION_MEMORIES[session_key] = {
             "chain": chain,
             "user_context": user_context,
+            "intent": intent,
             "last_access": datetime.now()
         }
-        print(f"✅ 새 대화 세션 생성: {session_key}")
+        print(f"✅ 새 대화 세션 생성: {session_key} (의도: {intent.value})")
         return chain, user_context
     else:
         # 기존 대화: 저장된 체인 재사용
@@ -372,6 +428,9 @@ def _create_new_chain(user_context: dict = None, first_input: str = None) -> Con
     # 마케팅 전략 정보 포맷팅
     strategy_text = _format_strategy_info(user_context.get("memory") if user_context else None)
     
+    # 의도에 맞는 parser 선택
+    selected_parser = parser_ad if intent == ConversationIntent.AD_GENERATION else parser_profile
+    
     # LangChain LLM 설정
     llm = ChatOpenAI(
         model="gpt-4o", 
@@ -390,7 +449,7 @@ def _create_new_chain(user_context: dict = None, first_input: str = None) -> Con
         template=template,
         input_variables=["input"],
         partial_variables={
-            "format_instructions": parser.get_format_instructions(),
+            "format_instructions": selected_parser.get_format_instructions(),
             "business_type": user_context.get("business_type", "미확인") if user_context else "미확인",
             "location": user_context.get("location", "미확인") if user_context else "미확인",
             "menu_items": user_context.get("menu_items", "미확인") if user_context else "미확인",
@@ -412,59 +471,194 @@ def _create_new_chain(user_context: dict = None, first_input: str = None) -> Con
 
 async def generate_conversation_response(
     user_input: str,
-    user_id: Optional[int] = None,
+    session_key: str,
+    is_guest: bool = False,
     user_context: dict = None
-) -> DialogueGPTResponse:
+) -> DialogueGPTResponse_AD | DialogueGPTResponse_Profile:
     """
     [비동기 버전] langchain 사용해서 multi-turn 대화 응답 생성
     
     Args:
         user_input: 사용자 입력
-        user_id: 사용자 ID (로그인한 경우)
+        session_key: 세션 키 (user-{id} or guest-{uuid})
+        is_guest: 비로그인 사용자 여부
         user_context: 사용자 프로필 및 장기 메모리 (새 세션에만 제공)
     
     Returns:
         DialogueGPTResponse: 다음 질문 또는 최종 콘텐츠
     """
     try:
-        # 새 세션 여부 확인
-        session_key = f"user-{user_id}" if user_id else "anonymous"
-        is_new_session = session_key not in CONVERSATION_MEMORIES
-        
-        # 체인 로드 또는 생성 (새 세션이고 user_id가 있을 때만 first_input 전달)
-        chain, context = _get_or_create_chain(
-            user_id,
-            user_context,
-            first_input=user_input if (is_new_session and user_id) else None
-        )
+        # 세션 재사용 또는 새 세션 생성
+        if session_key in CONVERSATION_MEMORIES:
+            print(f"♻️  기존 대화 세션 재사용: {session_key}")
+            memory_obj = CONVERSATION_MEMORIES[session_key]["memory"]
+            chain = CONVERSATION_MEMORIES[session_key]["chain"]
+            intent = CONVERSATION_MEMORIES[session_key]["intent"]
+            parser = CONVERSATION_MEMORIES[session_key]["parser"]
+        else:
+            print(f"✅ 새 대화 세션 생성: {session_key}")
+            
+            # 인텐트 결정
+            if is_guest:
+                intent = ConversationIntent.GUEST_PROFILE
+            elif user_context:
+                # 로그인 사용자: 마케팅 전략 정보 완성 여부 체크
+                has_complete_profile = _check_profile_completeness(user_context)
+                if has_complete_profile:
+                    # 프로필 완성 → 광고 생성 또는 정보 업데이트
+                    intent = classify_user_intent(user_input, has_complete_profile=True)
+                else:
+                    # 프로필 미완성 → 상세 프로필 수집
+                    intent = ConversationIntent.PROFILE_BUILDING
+            else:
+                # user_context 없음 → 프로필 수집
+                intent = ConversationIntent.PROFILE_BUILDING
+            
+            print(f"🎯 감지된 의도: {intent.value}")
+            
+            # 프롬프트 및 파서 선택
+            if intent == ConversationIntent.GUEST_PROFILE:
+                template = GUEST_PROFILE_TEMPLATE
+                parser = parser_ad  # 비로그인은 광고 생성으로
+            elif intent == ConversationIntent.PROFILE_BUILDING:
+                template = PROFILE_BUILDING_TEMPLATE
+                parser = parser_profile
+            elif intent == ConversationIntent.INFO_UPDATE:
+                template = INFO_UPDATE_TEMPLATE
+                parser = parser_profile
+            elif intent == ConversationIntent.AD_GENERATION:
+                template = AD_GENERATION_TEMPLATE
+                parser = parser_ad
+            else:
+                template = PROFILE_BUILDING_TEMPLATE
+                parser = parser_profile
+            
+            # 마케팅 전략 정보 포맷팅
+            strategy_text = _format_strategy_info(user_context.get("memory") if user_context else None)
+            
+            # LangChain 설정
+            llm = ChatOpenAI(
+                model="gpt-4o",
+                temperature=0.7,
+                openai_api_key=os.getenv("OPENAI_API_KEY")
+            )
+            
+            memory_obj = ConversationBufferWindowMemory(
+                k=MAX_MEMORY_TURNS,
+                memory_key="history",
+                return_messages=True
+            )
+            
+            prompt = PromptTemplate(
+                template=template,
+                input_variables=["input"],
+                partial_variables={
+                    "format_instructions": parser.get_format_instructions(),
+                    "business_type": user_context.get("business_type", "미확인") if user_context else "미확인",
+                    "location": user_context.get("location", "미확인") if user_context else "미확인",
+                    "menu_items": user_context.get("menu_items", "미확인") if user_context else "미확인",
+                    "business_hours": user_context.get("business_hours", "미확인") if user_context else "미확인",
+                    "existing_strategy": strategy_text
+                },
+            )
+            
+            chain = ConversationChain(
+                llm=llm,
+                prompt=prompt,
+                memory=memory_obj,
+                verbose=False
+            )
+            
+            # 세션 저장
+            CONVERSATION_MEMORIES[session_key] = {
+                "memory": memory_obj,
+                "chain": chain,
+                "intent": intent,
+                "parser": parser,
+                "user_context": user_context
+            }
         
         # langchain 실행(메모리 자동 관리 & 프롬프트 주입) - asyncio.to_thread 사용
         raw_response = await asyncio.to_thread(
             lambda: chain.invoke(input=user_input)['response'].strip()
         )
         
-        # Pydantic 모델로 변환 & 유효성 검사
-        data = _safe_json_from_text(raw_response)
-        response = DialogueGPTResponse(**data)
+        # 의도 가져오기
+        session = CONVERSATION_MEMORIES.get(session_key)
+        intent = session.get("intent") if session else ConversationIntent.AD_GENERATION
         
-        # 대화 완료 시: 세션 삭제 전 대화 기록 추출
-        if response.is_complete:
-            if user_id and session_key in CONVERSATION_MEMORIES:
-                # 대화 기록 추출
-                messages = chain.memory.chat_memory.messages
-                conversation_history = [
-                    {
-                        "role": "user" if msg.type == "human" else "assistant",
-                        "content": msg.content
-                    }
-                    for msg in messages
-                ]
-                response.conversation_history = conversation_history
-                print(f"📝 대화 기록 추출 완료: {len(conversation_history)}개 메시지")
-                
-                # 세션 삭제
-                del CONVERSATION_MEMORIES[session_key]
-                print(f"🗑️  대화 완료, 세션 삭제: {session_key}")
+        # Pydantic 모델로 변환 (이미 parser가 올바른 타입으로 파싱함)
+        data = _safe_json_from_text(raw_response)
+        
+        if intent in [ConversationIntent.AD_GENERATION, ConversationIntent.GUEST_PROFILE]:
+            # 광고 생성 모드 (로그인 AD_GENERATION + 비로그인 GUEST_PROFILE)
+            response = DialogueGPTResponse_AD(**data)
+        else:
+            # PROFILE_BUILDING, INFO_UPDATE, ANALYSIS
+            # GPT가 last_ment를 안 보내면 강제 주입
+            if data.get("is_complete") and not data.get("last_ment"):
+                data["last_ment"] = "위의 대화를 반영하겠습니다"
+            response = DialogueGPTResponse_Profile(**data)
+        
+        # 대화 완료 시: 대화 기록 추출 + Vision 통합 (세션 삭제는 gpt.py에서 처리)
+        if response.is_complete and session_key in CONVERSATION_MEMORIES:
+            # 대화 기록 추출
+            messages = memory_obj.chat_memory.messages
+            conversation_history = [
+                {
+                    "role": "user" if msg.type == "human" else "assistant",
+                    "content": msg.content
+                }
+                for msg in messages
+            ]
+            response.conversation_history = conversation_history
+            print(f"📝 대화 기록 추출 완료: {len(conversation_history)}개 메시지")
+            
+            # Vision 통합: 광고 생성 완료 + 제품 이미지 존재 시
+            if (
+                intent in [ConversationIntent.AD_GENERATION, ConversationIntent.GUEST_PROFILE]
+                and response.final_content
+                and "product_image" in CONVERSATION_MEMORIES[session_key]
+                and CONVERSATION_MEMORIES[session_key]["product_image"]
+            ):
+                try:
+                    print("🔍 Vision 분석 시작...")
+                    
+                    # 1. 전략 제안 추출
+                    strategy_proposal = extract_last_strategy_proposal(conversation_history)
+                    
+                    if strategy_proposal:
+                        print(f"✅ 전략 제안 추출 성공: {strategy_proposal[:100]}...")
+                        
+                        # 2. Vision으로 상세 프롬프트 생성
+                        product_image_base64 = CONVERSATION_MEMORIES[session_key]["product_image"]
+                        business_info = {
+                            "business_type": user_context.get("business_type", "미확인") if user_context else "미확인",
+                            "location": user_context.get("location", "미확인") if user_context else "미확인",
+                            "menu_items": user_context.get("menu_items", "미확인") if user_context else "미확인"
+                        }
+                        
+                        enhanced_prompt = await generate_detailed_image_prompt_with_vision(
+                            strategy_proposal=strategy_proposal,
+                            product_image_base64=product_image_base64,
+                            business_info=business_info
+                        )
+                        
+                        # 3. image_prompt 교체
+                        if enhanced_prompt:
+                            # Pydantic 모델 업데이트
+                            updated_final_content = response.final_content.model_copy(
+                                update={"image_prompt": enhanced_prompt}
+                            )
+                            response = response.model_copy(
+                                update={"final_content": updated_final_content}
+                            )
+                            print("✅ Vision 프롬프트 적용 완료")
+                    else:
+                        print("⚠️  전략 제안을 찾을 수 없음 (Vision 스킵)")
+                        
+                except Exception as e:
+                    print(f"❌ Vision 통합 실패 (기본 프롬프트 유지): {e}")
         
         return response
 
@@ -555,6 +749,151 @@ async def generate_marketing_idea(prompt_text: str, context=None) -> dict:
     except Exception as e:
         # 8) 최종 예외 단일화 및 상위 레이어 전달 역할
         raise ValueError(f"GPT 생성 실패: {e}")
+
+def extract_last_strategy_proposal(conversation_history: list) -> Optional[str]:
+    """
+    대화 히스토리에서 마지막 전략 제안 텍스트 추출
+    (사용자에게 보여준 5가지 전략 - 승인 전)
+    
+    Args:
+        conversation_history: [{"role": "user"|"assistant", "content": str}, ...]
+    
+    Returns:
+        전략 제안 텍스트 (5가지 항목 포함) 또는 None
+    """
+    if not conversation_history:
+        return None
+    
+    # 역순으로 탐색 (최근 메시지부터)
+    for msg in reversed(conversation_history):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", "")
+            
+            # 5가지 전략 키워드 확인
+            if "메인 메시지" in content and "타겟 고객" in content:
+                # 전략 제안 부분만 추출 (1. ~ 5. 포함)
+                match = re.search(
+                    r'(1\.\s*\*\*메인 메시지\*\*.*?5\.\s*\*\*주요 요소\*\*.*?)(?=\n\n|$)',
+                    content,
+                    re.DOTALL
+                )
+                if match:
+                    return match.group(1).strip()
+                else:
+                    # 매칭 실패 시 전체 content 반환 (fallback)
+                    return content
+    
+    return None
+
+
+async def generate_detailed_image_prompt_with_vision(
+    strategy_proposal: str,
+    product_image_base64: str,
+    business_info: dict
+) -> str:
+    """
+    GPT-4o Vision을 사용하여 제품 이미지 분석 + 전략 기반 상세 프롬프트 생성
+    
+    Args:
+        strategy_proposal: 5가지 전략 제안 텍스트
+        product_image_base64: 제품 이미지 (base64 인코딩)
+        business_info: 사업자 정보 (업종, 위치 등)
+    
+    Returns:
+        Stable Diffusion용 상세 영어 프롬프트
+    """
+    try:
+        # Vision API 호출용 프롬프트
+        vision_prompt = f"""
+You are a professional product photography director specializing in commercial advertising.
+
+=== Important Context ===
+The product in the image you see will be EXTRACTED and COMPOSITED onto a new background scene.
+Your task is to create a Stable Diffusion prompt that describes the BACKGROUND SCENE where this product will be placed.
+
+=== Business Information ===
+Business Type: {business_info.get('business_type', 'unknown')}
+Location: {business_info.get('location', 'unknown')}
+Main Products: {business_info.get('menu_items', 'unknown')}
+
+=== Approved Marketing Strategy ===
+{strategy_proposal}
+
+=== Task ===
+1. Analyze the product image (color, texture, shape, details)
+2. Based on the strategy's "Visual Concept" and "Image Style", design a background scene
+3. Create a detailed Stable Diffusion prompt in the following structure
+
+=== Required Prompt Structure (ALL IN ENGLISH) ===
+
+**Part 1: Environment & Atmosphere (30-40 words)**
+- Setting that matches the strategy's visual concept
+- Lighting (warm, soft, dramatic, natural, golden hour)
+- Overall mood and atmosphere
+
+**Part 2: Background Elements (20-30 words)**
+- People, objects, decorations matching target audience
+- Specify "in the background, slightly out of focus" or "blurred background"
+
+**Part 3: Photography Style (15-20 words)**
+- "cinematic photography", "commercial photography", "professional product advertising"
+- "shallow depth of field", "bokeh effect"
+
+**Part 4: Product Placement (20-30 words)**
+- Describe the product you see in the image (be specific about what you observe)
+- Must include: "in the foreground", "on the table", "sharp and detailed", "product hero shot"
+
+=== Example Output ===
+"A cozy winter cafe interior with warm, soft lighting and large windows,
+several people sitting and chatting in the background, slightly out of focus,
+cinematic photography, shallow depth of field, professional product advertising,
+the new seasonal drink on the table in the foreground, sharp and detailed, product hero shot"
+
+=== Critical Rules ===
+- ONLY write the prompt in English (NO Korean, NO explanations)
+- Background description comes FIRST
+- Product description comes LAST (foreground)
+- Background must be "out of focus" or "blurred"
+- Product must be "sharp", "detailed", "foreground"
+
+Now analyze the product image and generate the prompt:
+        """.strip()
+        
+        # GPT-4o Vision API 호출
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": vision_prompt
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{product_image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        enhanced_prompt = response.choices[0].message.content.strip()
+        print(f"✅ Vision 분석 완료: {enhanced_prompt[:100]}...")
+        
+        return enhanced_prompt
+        
+    except Exception as e:
+        print(f"❌ Vision API 호출 실패: {e}")
+        # Fallback: 전략 텍스트 기반 기본 프롬프트 생성
+        fallback = f"Professional product photography for {business_info.get('business_type', 'business')}, high quality, modern style"
+        return fallback
+
 
 async def extract_city_name_english(location: str) -> str:
     """

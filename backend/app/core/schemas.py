@@ -3,7 +3,7 @@
 
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 
 # 기본 응답구조
 class BaseResponse(BaseModel):
@@ -46,8 +46,8 @@ class GPTResponse(BaseResponse):
 class AdGenerateResponse(GPTResponse):
     image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
 
-class DiffusionRequest(BaseModel):
-    prompt: str = Field(..., description="이미지 생성용 프롬프트")
+# DiffusionRequest는 multipart/form-data로 받으므로 스키마 불필요
+# 실제 엔드포인트에서는 Form()과 File()을 사용합니다.
 
 class DiffusionResponse(BaseResponse):
     image_url: Optional[str] = Field(None, description="생성된 이미지 URL")
@@ -75,12 +75,23 @@ class FinalContentSchema(BaseModel):
     hashtags: List[str] = Field(..., description="자동 생성된 해시태그 목록")
     image_prompt: str = Field(..., description="이미지 생성용 프롬프트")
 
-# 대화 상태를 정의하는 gpt 응답 스키마 : gpt_servcie에서 사용
-class DialogueGPTResponse(BaseModel):
+# 광고 생성용 GPT 응답 스키마
+class DialogueGPTResponse_AD(BaseModel):
+    type: Literal["ad"] = Field(default="ad", description="응답 타입 (고정값: ad)")
     is_complete: bool = Field(..., description="정보 수집 완료 여부. True면 대화 종료.")
     next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
     final_content: Optional[FinalContentSchema] = Field(None, description="수집 완료 후 GPT가 생성한 최종 콘텐츠")
     conversation_history: Optional[List[dict]] = Field(None, description="대화 완료 시 전체 대화 기록 (메모리 업데이트용)")
+    session_key: Optional[str] = Field(None, description="세션 키 (user-{id} 또는 guest-{uuid})")
+
+# 프로필/정보 업데이트용 GPT 응답 스키마
+class DialogueGPTResponse_Profile(BaseModel):
+    type: Literal["profile"] = Field(default="profile", description="응답 타입 (고정값: profile)")
+    is_complete: bool = Field(..., description="정보 수집 완료 여부. True면 대화 종료.")
+    next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
+    last_ment: Optional[str] = Field(None, description="PROFILE_BUILDING/INFO_UPDATE 완료 시 표시할 확인 메시지")
+    conversation_history: Optional[List[dict]] = Field(None, description="대화 완료 시 전체 대화 기록 (메모리 업데이트용)")
+    session_key: Optional[str] = Field(None, description="세션 키 (user-{id} 또는 guest-{uuid})")
 
 # 클라이언트에게 전달될 최종 응답 스키마 (dialog.py 에서 사용)
 class DialogueResponse(BaseResponse):
