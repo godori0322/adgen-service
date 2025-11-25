@@ -82,6 +82,7 @@ class DialogueGPTResponse_AD(BaseModel):
     next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
     final_content: Optional[FinalContentSchema] = Field(None, description="수집 완료 후 GPT가 생성한 최종 콘텐츠")
     conversation_history: Optional[List[dict]] = Field(None, description="대화 완료 시 전체 대화 기록 (메모리 업데이트용)")
+    session_key: Optional[str] = Field(None, description="세션 키 (user-{id} 또는 guest-{uuid})")
 
 # 프로필/정보 업데이트용 GPT 응답 스키마
 class DialogueGPTResponse_Profile(BaseModel):
@@ -90,6 +91,7 @@ class DialogueGPTResponse_Profile(BaseModel):
     next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
     last_ment: Optional[str] = Field(None, description="PROFILE_BUILDING/INFO_UPDATE 완료 시 표시할 확인 메시지")
     conversation_history: Optional[List[dict]] = Field(None, description="대화 완료 시 전체 대화 기록 (메모리 업데이트용)")
+    session_key: Optional[str] = Field(None, description="세션 키 (user-{id} 또는 guest-{uuid})")
 
 # 클라이언트에게 전달될 최종 응답 스키마 (dialog.py 에서 사용)
 class DialogueResponse(BaseResponse):

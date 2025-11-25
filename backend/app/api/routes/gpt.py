@@ -1,11 +1,12 @@
 # gpt.py
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from typing import Optional
 from sqlalchemy.orm import Session
 import json
+import base64
 # 기존
 from backend.app.services.gpt_service import generate_marketing_idea
 # 추가
@@ -135,25 +136,61 @@ async def handle_marketing_dialog(
                     print(f"⚠️ 메모리 업데이트 실패 (비치명적): {mem_err}")
                     # 메모리 업데이트 실패해도 응답은 반환
         
-        # 6. 응답 반환 - 타입에 따라 다르게 처리
-        result = {
-            "type": response.type,  # type 필드 추가
-            "is_complete": response.is_complete,
-            "next_question": response.next_question,
-        }
-        
-        # DialogueGPTResponse_AD인 경우
-        if hasattr(response, 'final_content'):
-            result["final_content"] = response.final_content.dict() if response.final_content else None
-        # DialogueGPTResponse_Profile인 경우
-        if hasattr(response, 'last_ment'):
-            result["last_ment"] = response.last_ment
-        
-        return result
+        # 6. 응답 반환 - session_key 설정 (model_copy 사용)
+        return response.model_copy(update={"session_key": session_key})
     
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"GPT 응답 서비스 오류: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"서버 오류: {e}")
+
+
+@router.post("/dialogue/upload-image")
+async def upload_product_image(
+    session_key: str = Form(..., description="세션 키 (user-{id} 또는 guest-{uuid})"),
+    product_image: UploadFile = File(..., description="제품 사진 파일")
+):
+    """
+    대화 세션에 제품 이미지 업로드
+    
+    - session_key: 백엔드가 생성한 세션 키
+    - product_image: 제품 사진 파일 (jpg, png 등)
+    
+    Returns:
+        - message: 성공 메시지
+        - image_size: 업로드된 이미지 크기 (bytes)
+    """
+    try:
+        # 1. 세션 존재 확인
+        if session_key not in CONVERSATION_MEMORIES:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"세션을 찾을 수 없습니다: {session_key}"
+            )
+        
+        # 2. 이미지 읽기
+        image_bytes = await product_image.read()
+        
+        # 3. base64로 인코딩
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # 4. 세션에 저장
+        CONVERSATION_MEMORIES[session_key]["product_image"] = image_base64
+        
+        print(f"📸 제품 이미지 업로드 완료: {session_key} ({len(image_bytes)} bytes)")
+        
+        return {
+            "message": "이미지 업로드 성공",
+            "image_size": len(image_bytes),
+            "session_key": session_key
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"이미지 업로드 실패: {str(e)}"
+        )
 
 #
