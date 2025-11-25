@@ -6,18 +6,17 @@ import TextInput from "../../components/common/TextInput";
 import { PageTitle } from "../../components/common/Title";
 import Toast from "../../components/common/Toast";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../hooks/useToast";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
-  const [toast, setToast] = useState<string | null>(null);
+  const { toastMessage, showToast } = useToast();
 
   useEffect(() => {
     if (location.state?.registered) {
-      setToast("🎉 회원가입이 완료되었습니다!");
-      // 1.5초 뒤 자동으로 사라짐
-      setTimeout(() => setToast(null), 1500);
+      showToast("🎉 회원가입이 완료되었습니다!");
     }
   }, [location.state]);
   // 상태관리
@@ -140,7 +139,7 @@ export default function LoginPage() {
           </Link>
         </div>
       </div>
-      {toast && <Toast message={toast} />}
+      {toastMessage && <Toast message={toastMessage} />}
     </>
   );
 }
