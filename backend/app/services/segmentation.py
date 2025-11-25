@@ -2,128 +2,146 @@
 
 # 입력받은 이미지에서 제품 누끼 따기
 
+import os
 import torch
 import numpy as np
 import cv2
 from PIL import Image
 
-from mobile_sam import sam_model_registry
+from mobile_sam import sam_model_registry as mobile_sam_registry
 from mobile_sam.automatic_mask_generator import SamAutomaticMaskGenerator
+from segment_anything import sam_model_registry, SamPredictor
 
-class MobileSAMSegmentation:
-    def __init__(self, model_type="vit_t", checkpoint_path="weights/mobile_sam.pt"):
+# =========================================================
+# 1. SAM + MobileSAM 로딩
+# =========================================================
+class ProductSegmentation:
+    def __init__(self,
+                 mobile_sam_path="backend/weights/mobile_sam.pt",
+                 sam_model_type="vit_h",):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = sam_model_registry[model_type](checkpoint=checkpoint_path)
-        self.model.to(self.device)
-        self.model.eval()
-        self.mask_generator = SamAutomaticMaskGenerator(self.model)
+        self.mobile_sam = mobile_sam_registry["vit_t"](checkpoint=mobile_sam_path)
+        self.mobile_sam.to(self.device)
+        self.mobile_sam.eval()
 
+        self.mask_gen = SamAutomaticMaskGenerator(
+            self.mobile_sam,
+            points_per_side=24,
+        )
+
+        sam_ckpt = os.getenv("SAM_MODEL_PATH")
+        if sam_ckpt is None or not os.path.isfile(sam_ckpt):
+            raise FileNotFoundError("SAM 모델 체크포인트 파일을 찾을 수 없습니다.")
+
+        sam_model = sam_model_registry[sam_model_type](checkpoint=sam_ckpt)
+        sam_model.to(self.device)
+        sam_model.eval()
+
+        self.sam_predictor = SamPredictor(sam_model)
+
+    # =========================================================
+    # 2. PUBLIC API — 최종 누끼 (MobileSAM + SAM Refinement)
+    # =========================================================
     def remove_background(self, image: Image.Image):
-        # PIL -> numpy 변환(RGB)
         img_rgb = np.array(image.convert("RGB"))
 
-        # SAM 친화적 전처리 이미지
-        pre_img = preprocess_for_sam(img_rgb)
+        # MobileSAM → rough mask
+        rough_mask = self._mobilesam_segment(img_rgb)
 
-        # 자동 마스크 제네레이터
-        masks = self.mask_generator.generate(pre_img)
+        # SAM Box Prompt refinement
+        refined_mask = self._refine_with_sam(img_rgb, rough_mask)
 
+        # RGBA cutouts
+        rgba_mobile = self._create_cutout(img_rgb, rough_mask)
+        rgba_refined = self._create_cutout(img_rgb, refined_mask)
+
+        """
+        return {
+            "mobile_mask": rough_mask,
+            "refined_mask": refined_mask,
+            "mobile_cutout": rgba_mobile,
+            "refined_cutout": rgba_refined,
+        }
+        """
+        return refined_mask, rgba_refined
+
+    # =========================================================
+    # 3. MobileSAM segmentation
+    # =========================================================
+    def _mobilesam_segment(self, img_np):
+        masks = self.mask_gen.generate(img_np)
         if len(masks) == 0:
-            raise ValueError("No Mask found by SAM")
-        
-        H, W, _ = pre_img.shape
+            raise ValueError("MobileSAM이 마스크를 감지하지 못했습니다.")
 
-        # 마스크 후보들 중 중앙에 가장 가까운 마스크 선택
-        # 전체 픽셀의 1% 미만 크기의 마스크는 노이즈 처리
-        area_threshold = 0.01 * H * W
-        large_masks = [m for m in masks if m["area"] >= area_threshold]
+        # area 기준 정렬 → 가장 큰 객체 선택
+        masks = sorted(masks, key=lambda x: x["area"], reverse=True)
+        mask = masks[0]["segmentation"].astype(np.uint8)
 
-        if not large_masks:
-            large_masks = masks
-
-        # 상위 k개 중 중앙에 가장 가까운 마스크 선택
-        large_masks = sorted(large_masks, key=lambda x:x["area"], reverse=True)
-        top_k = large_masks[: min(3, len(large_masks))]
-        best_mask_dict = choose_most_centered_mask(top_k, H, W)
-        mask = best_mask_dict["segmentation"].astype(np.uint8)
-
-        # polarity 보정
-        if mask_needs_invert(img_rgb, mask):
+        # inversion 보정
+        if mask_needs_invert(mask):
             mask = 1 - mask
 
-        # 경계 완화
+        # 경계 부드럽게
         mask = refine_mask(mask)
 
-        # 누끼 따기 위한 RGB -> RGBA 이미지 생성
-        rgba = np.dstack([img_rgb, (mask * 255).astype(np.uint8)])
-        cutout = Image.fromarray(rgba)
+        return mask
 
-        return mask, cutout
+    # =========================================================
+    # 4. SAM(Box Prompt) refinement
+    # =========================================================
+    def _refine_with_sam(self, img_np, mask):
+        bbox = self._mask_to_bbox(mask)
 
-# 이미지 전처리
-def preprocess_for_sam(img_rgb):
-    img = img_rgb.copy()
+        self.sam_predictor.set_image(img_np)
+        masks, scores, _ = self.sam_predictor.predict(
+            box=bbox,
+            multimask_output=True
+        )
+        best_mask = masks[np.argmax(scores)].astype(np.uint8)
 
-    # L 채널(명도) 대비 향상(LAB: RGB보다 밝기에 초점을 둔 색 공간)
-    lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
-    l, a, b = cv2.split(lab)
+        # inversion 체크
+        if mask_needs_invert(best_mask):
+            best_mask = 1 - best_mask
 
-    # CLAHE(Contrast Limited Adaptive Histogram Equalization) 전처리
-    # 국소 대비 향상을 위한 알고리즘 -> 대비 강화, 노이즈 제거
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    l2 = clahe.apply(l)
+        return best_mask
 
-    lab = cv2.merge((l2, a, b))
-    img = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+    # =========================================================
+    # 5. 유틸 — mask → bounding box
+    # =========================================================
+    @staticmethod
+    def _mask_to_bbox(mask):
+        ys, xs = np.where(mask == 1)
+        y1, y2 = ys.min(), ys.max()
+        x1, x2 = xs.min(), xs.max()
+        return np.array([x1, y1, x2, y2])
 
-    # Gamma Correction(조명 보정)
-    gamma = 1.1
-    img = np.power(img / 255.0, gamma)
-    img = np.uint8(img * 255)
-
-    # Sharpening(경계 강화)
-    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-    img = cv2.filter2D(img, -1, kernel)
-
-    return img
-
-# ==========여러 마스크 후보 중 이미지 중앙에 가장 가까운 마스크 선택 --> 가독성만 개선
-def choose_most_centered_mask(masks, H, W):
-    center = np.array([H / 2, W / 2], dtype=np.float32)
-    best = None
-    best_dist = float("inf")
-
-    for m in masks:
-        seg = m["segmentation"]
-        ys, xs = np.where(seg)
-        if len(xs) == 0:
-            continue
-        cy = np.mean(ys)
-        cx = np.mean(xs)
-        point = np.array([cy, cx], dtype=np.float32)
-        dist = np.linalg.norm(point - center)
-        if dist < best_dist:
-            best_dist = dist
-            best = m
-
-    return best if best is not None else masks[0]
+    # =========================================================
+    # 6. 유틸 — RGBA cutout 생성
+    # =========================================================
+    @staticmethod
+    def _create_cutout(img_np, mask):
+        rgba = np.dstack([img_np, (mask * 255).astype(np.uint8)])
+        return Image.fromarray(rgba)
 
 
-# MobileSAM의 AutoMaskGenerator는 "제품:1, 배경:0" 마스킹이 항상 보장 X
-# 조명이 강하거나 제품과 배경 구분이 명확하지 않은 경우 mask 반전 위험 있음
-# 제품과 배경의 평균 색상 비교, mask polarity 자동 판별
-def mask_needs_invert(img_rgb, mask):
-    fg = img_rgb[mask == 1]
-    bg = img_rgb[mask == 0]
+# =============================================================
+# 7. inversion 체크
+# =============================================================
+def mask_needs_invert(mask):
+    h, w = mask.shape
+    y1, y2 = int(h * 0.3), int(h * 0.7)
+    x1, x2 = int(w * 0.3), int(w * 0.7)
 
-    fg_var = np.var(fg)
-    bg_var = np.var(bg)
+    center = mask[y1:y2, x1:x2]
+    ratio = np.mean(center)
 
-    return fg_var < bg_var 
+    return ratio < 0.3  # 비정상 → 반전 필요
 
-# 마스킹 후처리: 경계선을 자연스럽게 보정
-def refine_mask(mask, blur_size=15):
+
+# =============================================================
+# 8. 경계 부드럽게
+# =============================================================
+def refine_mask(mask, blur_size=13):
     mask = (mask * 255).astype(np.uint8)
-    refined = cv2.GaussianBlur(mask, (blur_size, blur_size), 0)
-    refined = refined / 255.0
-    return refined
+    mask = cv2.GaussianBlur(mask, (blur_size, blur_size), 0)
+    return (mask.astype(np.float32) / 255.0)
