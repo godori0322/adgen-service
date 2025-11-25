@@ -6,7 +6,7 @@ interface TimePickerProps {
   onChange: (value: string) => void;
 }
 
-export default function TimePicker({label, value, onChange}: TimePickerProps) {
+export default function TimePicker({ label, value, onChange }: TimePickerProps) {
   const [open, setOpen] = useState(false);
 
   const [hour, minute] = value.split(":").map(Number);
@@ -30,6 +30,7 @@ export default function TimePicker({label, value, onChange}: TimePickerProps) {
       <button
         onClick={() => setOpen(true)}
         className="w-full mt-1 px-3 py-2 border rounded-lg text-left bg-white"
+        type="button"
       >
         {value || "시간 선택"}
       </button>
