@@ -10,9 +10,8 @@ from PIL import Image
 
 from backend.app.services.diffusion_service import synthesize_image
 from backend.app.services.segmentation import ProductSegmentation
-# 스키마 Import 경로와 이름을 사용자가 제공한 내용에 맞춰 수정
-# 경로는 'backend.app.core.schemas'에 있다고 가정하고, 스키마 이름은 'DiffusionControlRequest/Response' 사용
-from backend.app.core.schemas import DiffusionControlRequest, DiffusionControlResponse, DiffusionAutoRequest 
+from backend.app.core.diffusion_presets import resolve_preset
+from backend.app.core.schemas import DiffusionControlRequest, DiffusionControlResponse, DiffusionAutoRequest, CompositionMode
 
 router = APIRouter(prefix="/diffusion", tags=["Diffusion"])
 
@@ -36,7 +35,7 @@ def _get_segmentation_model() -> ProductSegmentation:
 # 유틸리티 함수 (Base64 변환은 API 경계에서 처리)
 # ==============================================================================
 
-def _base64_to_image(base64_string: str) -> Image.Image:
+def _base64_to_image(base64_string: str) -> Optional[Image.Image]:
     """Base64 문자열을 PIL Image 객체로 변환합니다."""
     try:
         if not base64_string:
@@ -65,10 +64,11 @@ def _mask_array_to_pil(mask_array: np.ndarray) -> Image.Image:
 
 
 def _run_auto_synthesis(
-    original_image: Image.Image,    # 업로된 전체 이미지
+    original_image: Image.Image,    # 업로드 된 전체 이미지
     prompt: str,
-    control_weight: float,
-    ip_adapter_scale: float,
+    mode: CompositionMode = CompositionMode.balanced,      # 의도 모드 적용
+    control_weight: float | None = None,
+    ip_adapter_scale: float | None = None,
 ) -> Image.Image:
     """세그멘테이션 → 합성까지 실행하고 최종 이미지를 PIL로 반환."""
     model = _get_segmentation_model()
@@ -80,14 +80,21 @@ def _run_auto_synthesis(
     # 컷아웃 RGBA -> IP-Adapter/ControlNet용 RGB 이미지로 변경(추가)
     product_rgb = cutout_image.convert("RGB")
 
+    # CompositionMode + override -> 숫자로 변환
+    cw, ip = resolve_preset(
+        mode=mode,
+        override_control=control_weight,
+        override_ip=ip_adapter_scale,
+    )
+
     # 3) diffusion_service.synthesize_image 호출
     return synthesize_image(
         prompt=prompt,
         product_image=product_rgb,     # 누끼된 상품
         mask_image=mask_image,         # 상품 마스크
         full_image=original_image,     # 배경 포함 원본 (Depth 용)
-        control_weight=control_weight,
-        ip_adapter_scale=ip_adapter_scale,
+        control_weight=cw,
+        ip_adapter_scale=ip,
     )
 
 # ==============================================================================
@@ -111,6 +118,7 @@ async def diffusion_synthesize_auto(request_body: DiffusionAutoRequest = Body(..
         final_image_pil = _run_auto_synthesis(
             original_image=original_image,
             prompt=request_body.prompt or "",
+            mode=request_body.composition_mode,
             control_weight=request_body.control_weight,
             ip_adapter_scale=request_body.ip_adapter_scale,
         )
@@ -162,6 +170,7 @@ async def diffusion_synthesize_auto_upload(
         final_image_pil = _run_auto_synthesis(
             original_image=original_image,
             prompt=prompt or "",
+            mode=CompositionMode.balanced,
             control_weight=control_weight,
             ip_adapter_scale=ip_adapter_scale,
         )
