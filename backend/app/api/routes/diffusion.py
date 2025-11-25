@@ -68,23 +68,27 @@ def _mask_array_to_pil(mask_array: np.ndarray) -> Image.Image:
 
 
 def _run_auto_synthesis(
-    original_image: Image.Image,
+    original_image: Image.Image,    # 업로된 전체 이미지
     prompt: str,
     control_weight: float,
     ip_adapter_scale: float,
 ) -> Image.Image:
     """세그멘테이션 → 합성까지 실행하고 최종 이미지를 PIL로 반환."""
     model = _get_segmentation_model()
+    # 1) segmentation 전체 이미지 기준으로 누끼따기
     mask_array, cutout_image = model.remove_background(original_image)  # sam으로 마스크 + 컷아웃 get
+
+    # 2) 마스크/제품 RGB 준비
     mask_image = _mask_array_to_pil(mask_array)     # 마스크(nparray 0~1) -> l 모드로 pil 이미지
     # 컷아웃 RGBA -> IP-Adapter/ControlNet용 RGB 이미지로 변경(추가)
     product_rgb = cutout_image.convert("RGB")
 
-    # 제품 RGB -> originalimage로 넘기는 부분
+    # 3) diffusion_service.synthesize_image 호출
     return synthesize_image(
         prompt=prompt,
-        original_image=product_rgb,     # origianl_image == product rgb
-        mask_image=mask_image,
+        product_image=product_rgb,     # 누끼된 상품
+        mask_image=mask_image,         # 상품 마스크
+        full_image=original_image,     # 배경 포함 원본 (Depth 용)
         control_weight=control_weight,
         ip_adapter_scale=ip_adapter_scale,
     )

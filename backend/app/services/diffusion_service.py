@@ -9,6 +9,7 @@ os.environ.setdefault("HF_HOME", "/home/shared/models")
 os.environ.setdefault("DIFFUSERS_CACHE", "/home/shared/models")
 os.environ.setdefault("TRANSFORMERS_CACHE", "/home/shared/models")
 os.environ.setdefault("TORCH_HOME", "/home/shared/models")
+os.environ.setdefault("SAM_MODEL_PATH", "/home/shared/models/sam_vit_h_4b8939.pth")
 
 import torch
 from PIL import Image
@@ -28,7 +29,6 @@ HF_CACHE_DIR = "/home/shared/models"  # 공용 캐시/모델 디렉터리 경로
 SD15_MODEL_ID = "runwayml/stable-diffusion-v1-5"
 # 여기를 로컬 경로가 아니라 허깅페이스 모델 ID로 둬야 config.json을 찾을 수 있음
 CONTROLNET_DEPTH_ID = "lllyasviel/control_v11f1p_sd15_depth"
-
 IP_ADAPTER_MODEL_ID = "h94/IP-Adapter"
 IP_ADAPTER_SUBFOLDER = "models"
 IP_ADAPTER_WEIGHT_NAME = "ip-adapter_sd15.bin"  # SD1.5용 IP-Adapter 가중치 파일명
@@ -122,8 +122,9 @@ def _load_pipeline():
 
 def synthesize_image(
     prompt: str,
-    original_image: Image.Image,
+    product_image: Image.Image,
     mask_image: Image.Image,
+    full_image: Image.Image,
     control_weight: float = 1.0,
     ip_adapter_scale: float = 0.7,
 ) -> Image.Image:
@@ -132,8 +133,9 @@ def synthesize_image(
     '원본 상품 + 새 배경'이 합성된 이미지를 생성하는 함수
 
     - prompt           : 배경/장면에 대한 텍스트 프롬프트
-    - original_image   : 상품이 포함된 원본/누끼 이미지 (PIL)
-    - mask_image       : 상품 영역 마스크 (흰색=상품, 검정=배경)
+    - product_image    : 누끼된 제품 RGB
+    - mask_image       : 제품 영역 마스크 (흰색=상품, 검정=배경)
+    - full_image       : 배경 포함 원본 이미지
     - control_weight   : Depth ControlNet 강도 (0이면 depth 비활성화)
     - ip_adapter_scale : 레퍼런스 이미지 스타일 반영 강도 (0.1까지 반영가능)
     """
@@ -151,26 +153,29 @@ def synthesize_image(
 
     # 광고용 네거티브 프롬프트
     negative_prompt = (
-        "monochrome, lowres, bad anatomy, worst quality, low quality, blurry, text, logo, watermark, signature, handwriting, caption, blob, melted, distorted, deformed, out of frame"
+        "monochrome, lowres, bad anatomy, worst quality, low quality, blurry, "
+        "text, logo, watermark, signature, handwriting, caption, blob, melted, "
+        "distorted, deformed, out of frame"
     )
 
     try:
         # --------------------------------------------------------------
-        # 1. 입력 이미지 전처리 (모드 통일)
+        # 1. 입력 이미지 모드 정리
         # --------------------------------------------------------------
-        if original_image.mode not in ("RGB", "RGBA"):
-            original_image = original_image.convert("RGB")
+        if product_image.mode not in ("RGB", "RGBA"):
+            product_image = product_image.convert("RGB")
+        if full_image.mode not in ("RGB", "RGBA"):
+            full_image = full_image.convert("RGB")
         if mask_image.mode not in ("L", "RGB", "RGBA"):
             mask_image = mask_image.convert("L")
 
         # --------------------------------------------------------------
-        # 2. Depth 맵 생성 (control_weight == 0이면 비활성화)
+        # 2. Depth 맵은 "배경 포함 원본(full_image)"에서만 추출
         # --------------------------------------------------------------
         depth_map = None
-
         if control_weight > 0:
             depth_raw = _midas_detector(
-                original_image,
+                full_image,              # 누끼가 아닌 원본 사용
                 detect_resolution=512,
                 image_resolution=768,
             )
@@ -183,13 +188,12 @@ def synthesize_image(
             depth_map = Image.fromarray(depth_np)
 
         # --------------------------------------------------------------
-        # 3. IP-Adapter 스케일 설정
+        # 3. IP-Adapter는 "누끼된 product_image"에서 스타일/색감 가져오기
         # --------------------------------------------------------------
         ip_kwargs = {}
         if _ip_adapter_loaded and ip_adapter_scale > 0:
             pipe.set_ip_adapter_scale(ip_adapter_scale)
-            # 여기서 original_image는 diffusion.py에서 전달한 product_rgb (누끼 컷아웃)임
-            ip_kwargs["ip_adapter_image"] = original_image
+            ip_kwargs["ip_adapter_image"] = product_image
             print("[IP-Adapter] ip_adapter_image 및 scale 설정 완료.")
         else:
             pipe.set_ip_adapter_scale(0.0)
@@ -204,11 +208,11 @@ def synthesize_image(
         # 5. 파이프라인 호출 (Depth on/off 분기)
         # --------------------------------------------------------------
         if depth_map is not None:
-            print("[Pipeline] Using ControlNet Depth")
+            print("[Pipeline] Using ControlNet Depth (from full_image)")
             result = pipe(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
-                image=depth_map,  # ControlNet depth conditioning
+                image=depth_map,  # depth 맵을 ControlNet 입력으로 사용
                 controlnet_conditioning_scale=control_weight,
                 guidance_scale=8.0,
                 num_inference_steps=40,
@@ -231,14 +235,13 @@ def synthesize_image(
         generated_bg = result.images[0]
 
         # --------------------------------------------------------------
-        # 6. 최종 합성: 원본 상품 + 생성 배경
+        # 6. 최종 합성: product_image + 생성 배경
         # --------------------------------------------------------------
         bg_w, bg_h = generated_bg.size
-        fg = original_image.resize((bg_w, bg_h), Image.LANCZOS)
+        fg = product_image.resize((bg_w, bg_h), Image.LANCZOS)
         m = mask_image.resize((bg_w, bg_h), Image.LANCZOS).convert("L")
 
         final_image = Image.composite(fg, generated_bg, m)
-
         return final_image
 
     except Exception as e:
