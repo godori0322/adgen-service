@@ -600,7 +600,7 @@ async def generate_conversation_response(
                 data["last_ment"] = "위의 대화를 반영하겠습니다"
             response = DialogueGPTResponse_Profile(**data)
         
-        # 대화 완료 시: 대화 기록 추출 (세션 삭제는 gpt.py에서 처리)
+        # 대화 완료 시: 대화 기록 추출 + Vision 통합 (세션 삭제는 gpt.py에서 처리)
         if response.is_complete and session_key in CONVERSATION_MEMORIES:
             # 대화 기록 추출
             messages = memory_obj.chat_memory.messages
@@ -613,6 +613,52 @@ async def generate_conversation_response(
             ]
             response.conversation_history = conversation_history
             print(f"📝 대화 기록 추출 완료: {len(conversation_history)}개 메시지")
+            
+            # Vision 통합: 광고 생성 완료 + 제품 이미지 존재 시
+            if (
+                intent in [ConversationIntent.AD_GENERATION, ConversationIntent.GUEST_PROFILE]
+                and response.final_content
+                and "product_image" in CONVERSATION_MEMORIES[session_key]
+                and CONVERSATION_MEMORIES[session_key]["product_image"]
+            ):
+                try:
+                    print("🔍 Vision 분석 시작...")
+                    
+                    # 1. 전략 제안 추출
+                    strategy_proposal = extract_last_strategy_proposal(conversation_history)
+                    
+                    if strategy_proposal:
+                        print(f"✅ 전략 제안 추출 성공: {strategy_proposal[:100]}...")
+                        
+                        # 2. Vision으로 상세 프롬프트 생성
+                        product_image_base64 = CONVERSATION_MEMORIES[session_key]["product_image"]
+                        business_info = {
+                            "business_type": user_context.get("business_type", "미확인") if user_context else "미확인",
+                            "location": user_context.get("location", "미확인") if user_context else "미확인",
+                            "menu_items": user_context.get("menu_items", "미확인") if user_context else "미확인"
+                        }
+                        
+                        enhanced_prompt = await generate_detailed_image_prompt_with_vision(
+                            strategy_proposal=strategy_proposal,
+                            product_image_base64=product_image_base64,
+                            business_info=business_info
+                        )
+                        
+                        # 3. image_prompt 교체
+                        if enhanced_prompt:
+                            # Pydantic 모델 업데이트
+                            updated_final_content = response.final_content.model_copy(
+                                update={"image_prompt": enhanced_prompt}
+                            )
+                            response = response.model_copy(
+                                update={"final_content": updated_final_content}
+                            )
+                            print("✅ Vision 프롬프트 적용 완료")
+                    else:
+                        print("⚠️  전략 제안을 찾을 수 없음 (Vision 스킵)")
+                        
+                except Exception as e:
+                    print(f"❌ Vision 통합 실패 (기본 프롬프트 유지): {e}")
         
         return response
 
@@ -703,6 +749,151 @@ async def generate_marketing_idea(prompt_text: str, context=None) -> dict:
     except Exception as e:
         # 8) 최종 예외 단일화 및 상위 레이어 전달 역할
         raise ValueError(f"GPT 생성 실패: {e}")
+
+def extract_last_strategy_proposal(conversation_history: list) -> Optional[str]:
+    """
+    대화 히스토리에서 마지막 전략 제안 텍스트 추출
+    (사용자에게 보여준 5가지 전략 - 승인 전)
+    
+    Args:
+        conversation_history: [{"role": "user"|"assistant", "content": str}, ...]
+    
+    Returns:
+        전략 제안 텍스트 (5가지 항목 포함) 또는 None
+    """
+    if not conversation_history:
+        return None
+    
+    # 역순으로 탐색 (최근 메시지부터)
+    for msg in reversed(conversation_history):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", "")
+            
+            # 5가지 전략 키워드 확인
+            if "메인 메시지" in content and "타겟 고객" in content:
+                # 전략 제안 부분만 추출 (1. ~ 5. 포함)
+                match = re.search(
+                    r'(1\.\s*\*\*메인 메시지\*\*.*?5\.\s*\*\*주요 요소\*\*.*?)(?=\n\n|$)',
+                    content,
+                    re.DOTALL
+                )
+                if match:
+                    return match.group(1).strip()
+                else:
+                    # 매칭 실패 시 전체 content 반환 (fallback)
+                    return content
+    
+    return None
+
+
+async def generate_detailed_image_prompt_with_vision(
+    strategy_proposal: str,
+    product_image_base64: str,
+    business_info: dict
+) -> str:
+    """
+    GPT-4o Vision을 사용하여 제품 이미지 분석 + 전략 기반 상세 프롬프트 생성
+    
+    Args:
+        strategy_proposal: 5가지 전략 제안 텍스트
+        product_image_base64: 제품 이미지 (base64 인코딩)
+        business_info: 사업자 정보 (업종, 위치 등)
+    
+    Returns:
+        Stable Diffusion용 상세 영어 프롬프트
+    """
+    try:
+        # Vision API 호출용 프롬프트
+        vision_prompt = f"""
+You are a professional product photography director specializing in commercial advertising.
+
+=== Important Context ===
+The product in the image you see will be EXTRACTED and COMPOSITED onto a new background scene.
+Your task is to create a Stable Diffusion prompt that describes the BACKGROUND SCENE where this product will be placed.
+
+=== Business Information ===
+Business Type: {business_info.get('business_type', 'unknown')}
+Location: {business_info.get('location', 'unknown')}
+Main Products: {business_info.get('menu_items', 'unknown')}
+
+=== Approved Marketing Strategy ===
+{strategy_proposal}
+
+=== Task ===
+1. Analyze the product image (color, texture, shape, details)
+2. Based on the strategy's "Visual Concept" and "Image Style", design a background scene
+3. Create a detailed Stable Diffusion prompt in the following structure
+
+=== Required Prompt Structure (ALL IN ENGLISH) ===
+
+**Part 1: Environment & Atmosphere (30-40 words)**
+- Setting that matches the strategy's visual concept
+- Lighting (warm, soft, dramatic, natural, golden hour)
+- Overall mood and atmosphere
+
+**Part 2: Background Elements (20-30 words)**
+- People, objects, decorations matching target audience
+- Specify "in the background, slightly out of focus" or "blurred background"
+
+**Part 3: Photography Style (15-20 words)**
+- "cinematic photography", "commercial photography", "professional product advertising"
+- "shallow depth of field", "bokeh effect"
+
+**Part 4: Product Placement (20-30 words)**
+- Describe the product you see in the image (be specific about what you observe)
+- Must include: "in the foreground", "on the table", "sharp and detailed", "product hero shot"
+
+=== Example Output ===
+"A cozy winter cafe interior with warm, soft lighting and large windows,
+several people sitting and chatting in the background, slightly out of focus,
+cinematic photography, shallow depth of field, professional product advertising,
+the new seasonal drink on the table in the foreground, sharp and detailed, product hero shot"
+
+=== Critical Rules ===
+- ONLY write the prompt in English (NO Korean, NO explanations)
+- Background description comes FIRST
+- Product description comes LAST (foreground)
+- Background must be "out of focus" or "blurred"
+- Product must be "sharp", "detailed", "foreground"
+
+Now analyze the product image and generate the prompt:
+        """.strip()
+        
+        # GPT-4o Vision API 호출
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": vision_prompt
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{product_image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        enhanced_prompt = response.choices[0].message.content.strip()
+        print(f"✅ Vision 분석 완료: {enhanced_prompt[:100]}...")
+        
+        return enhanced_prompt
+        
+    except Exception as e:
+        print(f"❌ Vision API 호출 실패: {e}")
+        # Fallback: 전략 텍스트 기반 기본 프롬프트 생성
+        fallback = f"Professional product photography for {business_info.get('business_type', 'business')}, high quality, modern style"
+        return fallback
+
 
 async def extract_city_name_english(location: str) -> str:
     """
