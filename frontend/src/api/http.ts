@@ -75,14 +75,13 @@ export async function httpPostForm(url: string, form: FormData) {
   return res.json();
 }
 
-export async function httpPostImg(url: string, body: any) {
+export async function httpPostImg(url: string, form: FormData) {
   const res = await fetch(BASE_URL + url, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       ...authHeader(),
     },
-    body: JSON.stringify(body),
+    body: form,
   });
 
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

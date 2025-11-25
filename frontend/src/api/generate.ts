@@ -22,8 +22,11 @@ export async function generateDialogueRequest(userInput: string) {
   return await httpPost("/gpt/dialogue", body);
 }
 
-export async function generateDiffusionRequest(prompt: string) {
-  const img = await httpPostImg("/diffusion/generate", { prompt });
-  const imgSrc = URL.createObjectURL(img);
+export async function generateDiffusionRequest(prompt: string, img: File) {
+  const form = new FormData();
+  form.append("prompt", prompt);
+  form.append("product_image", img);
+  const result = await httpPostImg("/diffusion/generate", form);
+  const imgSrc = URL.createObjectURL(result);
   return imgSrc;
 }
