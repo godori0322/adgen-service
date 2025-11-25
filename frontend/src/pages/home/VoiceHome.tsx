@@ -5,7 +5,7 @@ import VoiceRecorder from "../../components/voice/VoiceRecorder";
 import { useVoiceChat } from "../../hooks/useVoiceChat";
 
 export default function VoiceHomePage() {
-  const { messages, needImage, onAudioSend, onImageUpload } = useVoiceChat();
+const { messages, needImage, isWorking, onAudioSend, onImageUpload } = useVoiceChat();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function VoiceHomePage() {
       )}
       {/* 🔥 이미지 필요할 땐 음성 녹음 버튼 숨김 */}
       <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40">
-        {!needImage && <VoiceRecorder onAudioSend={onAudioSend} />}
+        {!needImage && <VoiceRecorder onAudioSend={onAudioSend} disabled={isWorking} />}
       </div>
     </div>
   );
