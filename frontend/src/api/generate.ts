@@ -1,3 +1,4 @@
+import { getGuestSessionId } from "../utils/guestSession";
 import { httpPost, httpPostForm, httpPostImg } from "./http";
 
 export async function whisperTranscribeRequest(file: File) {
@@ -17,13 +18,27 @@ export async function generateRequest(text: string, context: string | null = nul
   return adRes;
 }
 
-export async function generateDialogueRequest(userInput: string) {
-  const body = { user_input: userInput };
+export async function generateDialogueRequest(userInput: string, isLogin: boolean) {
+  const body:any = { user_input: userInput };
+  if(!isLogin) {
+    body.guest_session_id = getGuestSessionId();
+  }
   return await httpPost("/gpt/dialogue", body);
 }
 
-export async function generateDiffusionRequest(prompt: string) {
-  const img = await httpPostImg("/diffusion/generate", { prompt });
-  const imgSrc = URL.createObjectURL(img);
+export async function generateDiffusionRequest(prompt: string, img: File) {
+  const form = new FormData();
+  form.append("prompt", prompt);
+  form.append("product_image", img);
+  const result = await httpPostImg("/diffusion/generate", form);
+  const imgSrc = URL.createObjectURL(result);
   return imgSrc;
+}
+
+export async function uploadImage(sessionKey: string, img: File) {
+  const form = new FormData();
+  form.append("session_key", sessionKey);
+  form.append("product_image", img);
+
+  await httpPostForm("/gpt/dialogue/upload-image", form);
 }

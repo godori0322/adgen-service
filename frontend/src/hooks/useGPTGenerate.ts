@@ -11,7 +11,6 @@ export async function useGptGenerate(userText: string, context: string | null = 
       image_prompt: "",
     };
   } catch (err) {
-    console.warn("JSON 파싱 실패");
     return {
       idea: gptRes.idea,
       caption: gptRes.caption,
