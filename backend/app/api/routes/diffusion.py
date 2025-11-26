@@ -2,15 +2,16 @@
 import asyncio
 import base64
 from io import BytesIO
+
 import io
 import os
 from typing import Optional
 import numpy as np
-from fastapi import APIRouter, HTTPException, Body, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Body, UploadFile, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
 from PIL import Image
 
-from backend.app.services.diffusion_service import synthesize_image
+from backend.app.services.diffusion_service import synthesize_image, generate_poster_image
 from backend.app.services.segmentation import ProductSegmentation
 from backend.app.core.diffusion_presets import resolve_preset
 from backend.app.core.schemas import DiffusionControlRequest, DiffusionControlResponse, DiffusionAutoRequest, CompositionMode
@@ -197,6 +198,27 @@ async def diffusion_synthesize_auto_upload(
         )
     except HTTPException:
         raise
+        
+@router.post("/generate")
+async def generate_image(
+    prompt: str = Form(..., description="이미지 생성용 프롬프트"),
+    product_image: Optional[UploadFile] = File(None, description="제품 사진, 배경과 합성용")
+):
+    """
+    multipart/form-data로 이미지 생성 요청을 받습니다.
+    - prompt: 텍스트 필드
+    - product_image: 파일 (선택사항)
+    """
+    try:
+        # product_image가 있으면 바이트로 읽기
+        product_image_bytes = None
+        if product_image:
+            product_image_bytes = await product_image.read()
+        
+        # 이미지 생성 (product_image_bytes를 서비스에 전달)
+        image_bytes = generate_poster_image(prompt, product_image_bytes)
+        image_stream = io.BytesIO(image_bytes)
+        return StreamingResponse(image_stream, media_type="image/png")
     except Exception as e:
         print(f"[FATAL][AUTO][UPLOAD] An unexpected error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))

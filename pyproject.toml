@@ -44,6 +44,7 @@ dependencies = [
     # Utilities
     "python-dotenv>=1.2.1",
     "requests>=2.31.0",
+    "httpx>=0.24.0",
     "tqdm>=4.67.1",
     # Development & Notebook
     "jupyter>=1.1.1",

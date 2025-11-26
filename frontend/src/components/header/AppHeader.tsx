@@ -1,27 +1,35 @@
 // src/components/header/AppHeader.tsx
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export default function AppHeader() {
-  const {isLogin, logout} = useAuth();
+  const { isLogin, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  
+  const handleLogoClick = (e: React.MouseEvent) => {
+    if (location.pathname === "/") {
+      e.preventDefault();
+      window.location.reload();
+    }
+  };
+
   return (
     <header className="w-full bg-white shadow-sm px-6 py-4 flex justify-between items-center">
-      <Link to="/" className="text-xl font-bold text-blue-600">
+      <Link to="/" onClick={handleLogoClick} className="text-xl font-bold text-blue-600">
         AdGen
       </Link>
 
       <nav className="flex gap-4">
-        <Link to="/" className="text-gray-700 hover:text-blue-600">
+        {/* <Link to="/voiceChat" className="text-gray-700 hover:text-blue-600">
           음성 입력
-        </Link>
+        </Link> */}
         {/* 로그인 상태 */}
         {isLogin ? (
           <>
-            <Link to="/history" className="hover:text-blue-600">
+            {/* <Link to="/history" className="hover:text-blue-600">
               히스토리
-            </Link>
+            </Link> */}
             <Link to="/mypage" className="hover:text-blue-600">
               마이페이지
             </Link>

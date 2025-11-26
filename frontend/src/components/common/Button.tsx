@@ -25,7 +25,7 @@ export default function Button ({
         ${disabled ? "bg-blue-300 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"}
       `}
     >
-      {loading ? "처리 중..." : text}
+      {loading ? "로그인 중..." : text}
     </button>
   );
 }

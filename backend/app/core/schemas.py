@@ -3,7 +3,7 @@
 
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 from enum import Enum
 
 # 기본 응답구조
@@ -56,6 +56,8 @@ class CompositionMode(str, Enum):
 # 이미지 생성 관련 스키마 그룹
 class DiffusionRequest(BaseModel):
     prompt: str = Field(..., description="이미지 생성용 프롬프트")
+# DiffusionRequest는 multipart/form-data로 받으므로 스키마 불필요
+# 실제 엔드포인트에서는 Form()과 File()을 사용합니다.
 
 # =============ControlNet/IP-Adapter 요청 스키마(추가)===========================
 class DiffusionControlRequest(BaseModel):
@@ -130,11 +132,23 @@ class FinalContentSchema(BaseModel):
     hashtags: List[str] = Field(..., description="자동 생성된 해시태그 목록")
     image_prompt: str = Field(..., description="이미지 생성용 프롬프트")
 
-# 대화 상태를 정의하는 gpt 응답 스키마 : gpt_servcie에서 사용
-class DialogueGPTResponse(BaseModel):
+# 광고 생성용 GPT 응답 스키마
+class DialogueGPTResponse_AD(BaseModel):
+    type: Literal["ad"] = Field(default="ad", description="응답 타입 (고정값: ad)")
     is_complete: bool = Field(..., description="정보 수집 완료 여부. True면 대화 종료.")
     next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
     final_content: Optional[FinalContentSchema] = Field(None, description="수집 완료 후 GPT가 생성한 최종 콘텐츠")
+    conversation_history: Optional[List[dict]] = Field(None, description="대화 완료 시 전체 대화 기록 (메모리 업데이트용)")
+    session_key: Optional[str] = Field(None, description="세션 키 (user-{id} 또는 guest-{uuid})")
+
+# 프로필/정보 업데이트용 GPT 응답 스키마
+class DialogueGPTResponse_Profile(BaseModel):
+    type: Literal["profile"] = Field(default="profile", description="응답 타입 (고정값: profile)")
+    is_complete: bool = Field(..., description="정보 수집 완료 여부. True면 대화 종료.")
+    next_question: Optional[str] = Field(None, description="다음으로 사용자에게 물어볼 질문 텍스트")
+    last_ment: Optional[str] = Field(None, description="PROFILE_BUILDING/INFO_UPDATE 완료 시 표시할 확인 메시지")
+    conversation_history: Optional[List[dict]] = Field(None, description="대화 완료 시 전체 대화 기록 (메모리 업데이트용)")
+    session_key: Optional[str] = Field(None, description="세션 키 (user-{id} 또는 guest-{uuid})")
 
 # 클라이언트에게 전달될 최종 응답 스키마 (dialog.py 에서 사용)
 class DialogueResponse(BaseResponse):
@@ -215,3 +229,49 @@ class AdRequestResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ==================== 마케팅 전략 정보 스키마 ====================
+
+class MarketingStrategy(BaseModel):
+    """마케팅 전략 정보 (JSON 저장용)"""
+    
+    target_audience: Optional[dict] = Field(
+        default=None,
+        description="타겟 고객 정보",
+        example={
+            "age_group": ["20대", "30대"],
+            "occupation": ["직장인"],
+            "gender": "여성",
+            "characteristics": ["조용한 공간 선호"]
+        }
+    )
+    
+    competitive_advantage: Optional[List[str]] = Field(
+        default=None,
+        description="차별화 포인트",
+        example=["넓은 공간", "조용한 분위기"]
+    )
+    
+    brand_concept: Optional[dict] = Field(
+        default=None,
+        description="브랜드 컨셉",
+        example={
+            "keywords": ["북유럽 감성", "힐링"],
+            "tone": "차분하고 따뜻한"
+        }
+    )
+    
+    marketing_goals: Optional[List[str]] = Field(
+        default=None,
+        description="마케팅 목표",
+        example=["평일 오후 매출 증대", "신규 고객 유치"]
+    )
+    
+    preferences: Optional[dict] = Field(
+        default=None,
+        description="마케팅 선호도",
+        example={
+            "channels": ["인스타그램"],
+            "content_style": ["감성 사진"]
+        }
+    )

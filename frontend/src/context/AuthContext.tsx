@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 
 interface AuthContextValue {
@@ -12,6 +13,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({children}: {children: React.ReactNode}) {
   const [token, setToken] = useState<string | null>(null);
+  const navigate = useNavigate();
   
   useEffect(() => {
     const storedToken = localStorage.getItem("token");
@@ -26,6 +28,8 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   const logout = () => {
     setToken(null);
     localStorage.removeItem('token');
+    navigate("/");
+    window.location.reload();
   };
 
   return (
