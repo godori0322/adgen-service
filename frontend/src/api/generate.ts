@@ -1,3 +1,4 @@
+import type { ImageMode } from "../components/voice/ImageModeSelectorBubble";
 import { getGuestSessionId } from "../utils/guestSession";
 import { httpPost, httpPostForm, httpPostImg } from "./http";
 
@@ -26,7 +27,7 @@ export async function generateDialogueRequest(userInput: string, isLogin: boolea
   return await httpPost("/gpt/dialogue", body);
 }
 
-export async function generateDiffusionRequest(prompt: string, img: File) {
+export async function generateDiffusionRequest(prompt: string, img: File, imageMode: ImageMode) {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("product_image", img);

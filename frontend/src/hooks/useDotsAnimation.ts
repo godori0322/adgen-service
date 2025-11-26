@@ -10,7 +10,9 @@ export function useDotsAnimation() {
     const frames = [".", "..", "..."];
     timerRef.current = window.setInterval(() => {
       stepRef.current = (stepRef.current + 1) % frames.length;
-      updateTempMessage(tempId, { content: frames[stepRef.current] });
+      updateTempMessage(tempId, {
+        content: frames[stepRef.current],
+      });
     }, 400);
   };
 
