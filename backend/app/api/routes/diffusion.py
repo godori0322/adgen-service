@@ -1,7 +1,9 @@
 # diffusion.py
+import asyncio
 import base64
 from io import BytesIO
 import io
+import os
 from typing import Optional
 import numpy as np
 from fastapi import APIRouter, HTTPException, Body, UploadFile, File, Form
@@ -14,6 +16,12 @@ from backend.app.core.diffusion_presets import resolve_preset
 from backend.app.core.schemas import DiffusionControlRequest, DiffusionControlResponse, DiffusionAutoRequest, CompositionMode
 
 router = APIRouter(prefix="/diffusion", tags=["Diffusion"])
+
+# ----------------------------------------------------------------------------
+# 요청 큐/세마포어 (동시 생성 억제)
+# ----------------------------------------------------------------------------
+_max_concurrency = int(os.getenv("DIFFUSION_MAX_CONCURRENCY", "1"))
+_request_semaphore = asyncio.Semaphore(max(1, _max_concurrency))
 
 # ------------------------------------------------------------------------------
 # 전역 세그멘테이션 모델 (lazy load)
@@ -115,13 +123,14 @@ async def diffusion_synthesize_auto(request_body: DiffusionAutoRequest = Body(..
         if original_image is None:
             raise ValueError("Product image is missing or invalid.")
 
-        final_image_pil = _run_auto_synthesis(
-            original_image=original_image,
-            prompt=request_body.prompt or "",
-            mode=request_body.composition_mode,
-            control_weight=request_body.control_weight,
-            ip_adapter_scale=request_body.ip_adapter_scale,
-        )
+        async with _request_semaphore:
+            final_image_pil = await asyncio.to_thread(
+                _run_auto_synthesis,
+                original_image=original_image,
+                prompt=request_body.prompt or "",
+                control_weight=request_body.control_weight,
+                ip_adapter_scale=request_body.ip_adapter_scale,
+            )
         final_image_b64 = _image_to_base64(final_image_pil)
         print("[API] Auto synthesis successful. Returning Base64 image.")
 
@@ -167,13 +176,14 @@ async def diffusion_synthesize_auto_upload(
         raise HTTPException(status_code=400, detail="Invalid image upload.")
 
     try:
-        final_image_pil = _run_auto_synthesis(
-            original_image=original_image,
-            prompt=prompt or "",
-            mode=CompositionMode.balanced,
-            control_weight=control_weight,
-            ip_adapter_scale=ip_adapter_scale,
-        )
+        async with _request_semaphore:
+            final_image_pil = await asyncio.to_thread(
+                _run_auto_synthesis,
+                original_image=original_image,
+                prompt=prompt or "",
+                control_weight=control_weight,
+                ip_adapter_scale=ip_adapter_scale,
+            )
         print("[API] Auto synthesis (upload) successful. Returning PNG image.")
 
         buf = io.BytesIO()
