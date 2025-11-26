@@ -6,6 +6,7 @@ export interface ChatMessage {
   content: string;
   img?: string;
   tempId?: number;
+  modeSelect?: boolean;
   parsed?: {
     idea: string;
     caption: string;
