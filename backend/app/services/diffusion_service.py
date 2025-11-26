@@ -30,7 +30,7 @@ os.environ.setdefault("HF_HOME", "/home/shared/models")
 os.environ.setdefault("DIFFUSERS_CACHE", "/home/shared/models")
 os.environ.setdefault("TRANSFORMERS_CACHE", "/home/shared/models")
 os.environ.setdefault("TORCH_HOME", "/home/shared/models")
-os.environ.setdefault("SAM_MODEL_PATH", "/home/shared/models/sam_vit_h_4b8939.pth")
+os.environ.setdefault("SAM_MODEL_PATH", "/home/shared/models/sam_vit_b_01ec64.pth")
 
 HF_CACHE_DIR = "/home/shared/models"  # 공용 캐시/모델 디렉터리 경로 상수
 
