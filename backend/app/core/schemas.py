@@ -183,6 +183,43 @@ class UserCreate(BaseModel):
             }
         }
 
+class UserNameFind(BaseModel):
+    """사용자 아이디 찾기 요청"""
+    email: str = Field(..., description="이메일")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "owner@example.com",
+            }
+        }
+
+class PasswordFind(BaseModel):
+    """사용자 비밀번호 찾기 요청"""
+    username: str = Field(..., min_length=3, max_length=50, description="사용자 아이디")
+    email: str = Field(..., description="이메일")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "username": "cafe_owner",
+                "email": "owner@example.com",
+            }
+        }
+
+class PasswordReset(BaseModel):
+    """사용자 비밀번호 리셋 요청"""
+    username: str = Field(..., min_length=3, max_length=50, description="사용자 아이디")
+    password: str = Field(..., min_length=6, description="비밀번호")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "username": "cafe_owner",
+                "password": "securepass123",
+            }
+        }
+
 class UserUpdate(BaseModel):
     """사용자 정보 수정"""
     business_type: Optional[str] = None

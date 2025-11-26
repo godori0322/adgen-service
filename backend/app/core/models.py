@@ -26,7 +26,9 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationship
-    ad_requests = relationship("AdRequest", back_populates="user")
+    ad_requests = relationship("AdRequest", back_populates="user", cascade="all, delete-orphan")
+    memories = relationship("UserMemory", back_populates="user", cascade="all, delete-orphan")
+
 
 
 class AdRequest(Base):
@@ -34,7 +36,7 @@ class AdRequest(Base):
     __tablename__ = "ad_requests"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 비로그인 사용자는 NULL
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)  # 비로그인 사용자는 NULL
     
     # 처리 과정 데이터
     voice_text = Column(Text, nullable=True)  # Whisper로 변환된 음성 텍스트
@@ -56,7 +58,7 @@ class UserMemory(Base):
     __tablename__ = "user_memories"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 마케팅 전략 정보 (JSON 형식)
     marketing_strategy = Column(JSON, nullable=True)
@@ -72,4 +74,4 @@ class UserMemory(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationship
-    user = relationship("User", backref="memories")
+    user = relationship("User", back_populates="memories")

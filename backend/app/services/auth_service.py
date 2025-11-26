@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from backend.app.core.models import User
-from backend.app.core.schemas import UserCreate, TokenData
+from backend.app.core.schemas import UserCreate, TokenData, PasswordReset
 import json
 
 # 비밀번호 해싱 설정 (Argon2 사용 - 72바이트 제한 없음, 더 안전)
@@ -53,6 +53,22 @@ def get_user_by_username(db: Session, username: str) -> Optional[User]:
     """사용자명으로 사용자 조회"""
     return db.query(User).filter(User.username == username).first()
 
+def get_user_by_username_email(db: Session, username: str, email: str) -> Optional[User]:
+    """사용자명 + 이메일으로 사용자 조회"""
+    return db.query(User).filter(User.username == username, User.email == email).first()
+
+def reset_password(db:Session, user_data:PasswordReset) -> User:
+    """비밀번호 변경"""
+    user = get_user_by_username(db, user_data.username)
+    if not user:
+        return None
+        
+    hashed_password = get_password_hash(user_data.password)
+    user.hashed_password = hashed_password
+    db.commit()
+    db.refresh(user)
+    return user
+    
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     """이메일로 사용자 조회"""
     return db.query(User).filter(User.email == email).first()
