@@ -42,6 +42,7 @@ async def generate_marketing_content(req: GPTRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # 추가: multi-turn 대화 API : dialogue 요청 처리
 @router.post("/dialogue")
 async def handle_marketing_dialog(

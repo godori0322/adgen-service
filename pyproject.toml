@@ -29,9 +29,9 @@ dependencies = [
     "argon2-cffi>=23.1.0",
     # AI & ML
     "openai>=2.7.1",
-    "torch>=2.6.0",
-    "torchaudio>=2.6.0",
-    "torchvision>=0.21.0",
+    "torch==2.3.1",
+    "torchaudio==2.3.1",
+    "torchvision==0.18.1",
     "diffusers>=0.30.0",
     "transformers>=4.44.0",
     "accelerate>=0.34.0",
@@ -52,6 +52,13 @@ dependencies = [
     "matplotlib>=3.10.7",
     # Frontend (optional)
     "streamlit>=1.51.0",
+    "opencv-python>=4.11.0.86",
+    "timm==0.9.12",
+    "controlnet-aux>=0.0.10",
+    "mediapipe>=0.10.14",
+    # GitHub 패키지
+    "segment-anything @ git+https://github.com/facebookresearch/segment-anything.git",
+    "mobile-sam @ git+https://github.com/ChaoningZhang/MobileSAM.git"
 ]
 
 [project.optional-dependencies]
@@ -63,7 +70,6 @@ dev = [
     "ruff>=0.1.0",
     "transformers>=4.57.1",
     "uvicorn>=0.38.0",
-    "xformers>=0.0.32.post2",
 ]
 
 [build-system]
@@ -80,3 +86,6 @@ target-version = ['py310']
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.uv.sources]
+mobile-sam = { git = "https://github.com/ChaoningZhang/MobileSAM.git" }

@@ -5,7 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from backend.app.services.weather_service import get_weather
 from backend.app.services.gpt_service import generate_marketing_idea
-from backend.app.services.diffusion_service import generate_poster_image
+from backend.app.services.diffusion_service import synthesize_image
 from backend.app.core.schemas import GPTRequest, AdGenerateResponse
 from backend.app.core.database import get_db
 from backend.app.core.models import User, AdRequest
@@ -84,7 +84,7 @@ async def generate_ad(
         print(f"[GPT 아이디어] {idea}")
         print(f"[이미지 프롬프트] {image_prompt}")
 
-        image_bytes = generate_poster_image(image_prompt)
+        image_bytes = synthesize_image(image_prompt)
         image_base64 = base64.b64encode(image_bytes).decode("ascii")
 
         # GPT 출력 텍스트 생성

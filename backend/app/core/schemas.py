@@ -4,6 +4,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List, Any, Literal
+from enum import Enum
 
 # 기본 응답구조
 class BaseResponse(BaseModel):
@@ -46,8 +47,64 @@ class GPTResponse(BaseResponse):
 class AdGenerateResponse(GPTResponse):
     image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
 
+# 의도 라벨링 스키마 추가
+class CompositionMode(str, Enum):
+    rigid = "rigid"
+    balanced = "balanced"
+    creative = "creative"
+
+# 이미지 생성 관련 스키마 그룹
+class DiffusionRequest(BaseModel):
+    prompt: str = Field(..., description="이미지 생성용 프롬프트")
 # DiffusionRequest는 multipart/form-data로 받으므로 스키마 불필요
 # 실제 엔드포인트에서는 Form()과 File()을 사용합니다.
+
+# =============ControlNet/IP-Adapter 요청 스키마(추가)===========================
+class DiffusionControlRequest(BaseModel):
+    # 텍스트 정보
+    prompt: str = Field(..., description="생성할 배경에 대한 텍스트 프롬프트")
+    # 이미지 정보(누끼 처리된 제품 사진) -> 누끼딴 이미지의 base64 문자열
+    original_image_b64: str = Field(..., description="원본 제품 이미지 (Base64). Depth Map과 IP-Adapter 임베딩 추출에 사용.")
+    mask_b64: str = Field(..., description="누끼팀(MobileSAM)이 추출한 흑백 마스크 (Base64). Inpainting 영역 지정에 사용.")   
+    # 제어 강도 파라미터(튜닝용)
+    # Controlnet Depth 강도
+    control_weight: Optional[float] = Field(1.0, ge=0.0, le=2.0, description="ControlNet (Depth) 제어 강도. 1.0 권장.")
+    # IP-Adapter 강도 (스타일 주입)
+    ip_adapter_scale: Optional[float] = Field(0.7, ge=0.0, le=1.0, description="IP-Adapter 스타일 주입 강도. 0.7 권장.")
+
+# 누끼 추출부터 배경 합성까지 한 번에 처리하는 요청 스키마
+# 의도 라벨링 추가
+class DiffusionAutoRequest(BaseModel):
+    prompt: Optional[str] = Field(
+        "A cinematic, studio-lit product hero shot on a clean background",
+        description="배경/분위기에 대한 텍스트 프롬프트 (미입력 시 기본값 사용)",
+    )
+    product_image_b64: str = Field(
+        ...,
+        description="사용자가 업로드한 원본 제품 이미지(Base64)")
+    composition_mode: CompositionMode = Field(
+        default=CompositionMode.balanced,
+        description="합성 모드 (rigid/balanced/creative)"
+    )
+    control_weight: float | None = Field(
+        default=None,
+        description="프리셋을 덮어쓰고 싶은 경우에만 사용. 기본은 프리셋 값"
+    )
+    ip_adapter_scale: float | None = Field(
+        default=None,
+        description="프리셋을 덮어쓰고 싶은 경우에만 사용. 기본은 프리셋 값"
+    )
+    # control_weight: Optional[float] = Field(
+    #     0.7, ge=0.0, le=2.0, description="ControlNet (Depth) 제어 강도. 0.5~0.9 권장."
+    # )
+    # ip_adapter_scale: Optional[float] = Field(
+    #     0.1, ge=0.0, le=1.0, description="IP-Adapter 스타일 주입 강도. 0.1~0.3 권장."
+    # )
+
+# 최종 이미지 반환
+class DiffusionControlResponse(BaseModel):
+    image_b64: str = Field(..., description="배경 합성 및 Control이 완료된 최종 이미지 (Base64)")
+
 
 class DiffusionResponse(BaseResponse):
     image_url: Optional[str] = Field(None, description="생성된 이미지 URL")
