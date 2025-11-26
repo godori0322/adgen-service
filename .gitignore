@@ -53,3 +53,7 @@ requirements.txt
 .env.example
 outputs/
 pycache/
+
+
+alembic.ini
+alembic/__pycache__/
