@@ -35,6 +35,15 @@ export async function generateDiffusionRequest(prompt: string, img: File) {
   return imgSrc;
 }
 
+export async function generateSyntheSizeDiffusionRequest(prompt: string, img: File) {
+  const form = new FormData();
+  form.append("prompt", prompt);
+  form.append("file", img);
+  const result = await httpPostImg("/diffusion/synthesize/auto/upload", form);
+  const imgSrc = URL.createObjectURL(result);
+  return imgSrc;
+}
+
 export async function uploadImage(sessionKey: string, img: File) {
   const form = new FormData();
   form.append("session_key", sessionKey);

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { generateDialogueRequest, generateDiffusionRequest, uploadImage } from "../api/generate";
+import { generateDialogueRequest, generateDiffusionRequest, generateSyntheSizeDiffusionRequest, uploadImage } from "../api/generate";
 import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
 import { useAuth } from "../context/AuthContext";
 import { formatChatResponse } from "../utils/chatFormatter";
@@ -112,7 +112,7 @@ export function useVoiceChat() {
         ]);
 
         if (!uploadedImageFile) return;
-        const imgSrc = await generateDiffusionRequest(imagePrompt, uploadedImageFile);
+        const imgSrc = await generateSyntheSizeDiffusionRequest(imagePrompt, uploadedImageFile);
 
         // 이미지 채우기
         setMessages((prev) =>
