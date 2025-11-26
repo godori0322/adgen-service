@@ -1,11 +1,10 @@
 // src/components/header/AppHeader.tsx
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export default function AppHeader() {
   const { isLogin, logout } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
 
   const handleLogoClick = (e: React.MouseEvent) => {
     if (location.pathname === "/") {
