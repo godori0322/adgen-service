@@ -3,6 +3,7 @@
 
 # .env 로드 (SAM_MODEL_PATH 사용)
 from dotenv import load_dotenv
+from transformers import CTRLPreTrainedModel
 load_dotenv()
 
 import os
@@ -111,9 +112,23 @@ class ProductSegmentation:
         # 경계 부드럽게 (0~1 float)
         refined_mask = refine_mask(mask)
 
+        # halo 제거
+        refined_mask = remove_halo(refined_mask)
+
         # RGBA 컷아웃 생성
         rgba_refined = self._create_cutout(img_rgb, refined_mask)
 
+        # 색상 decontamination
+        rgba_np = np.array(rgba_refined)[..., :3]
+        cleaned = color_decontaminate(rgba_np, refined_mask)
+
+        # numpy -> PIL
+        rgb_cutout = Image.fromarray(cleaned)
+        alpha = (refined_mask * 255).astype(np.uint8)
+        rgba_cutout = np.dstack([cleaned, alpha])
+        rgba_final = Image.fromarray(rgba_cutout)
+
+        # GPU 메모리 해제
         if torch.cuda.is_available():
             self.sam_model.to("cpu")
 
@@ -133,7 +148,7 @@ class ProductSegmentation:
             
             print("[Segmentation] SAM moved back to CPU after segmentation.")
 
-        return refined_mask, rgba_refined
+        return refined_mask, rgba_final
 
     # =========================================================
     # 3. 유틸 — RGBA cutout 생성
@@ -182,3 +197,37 @@ def refine_mask(mask: np.ndarray, blur_size: int = 13) -> np.ndarray:
     mask = (mask * 255).astype(np.uint8)
     mask = cv2.GaussianBlur(mask, (blur_size, blur_size), 0)
     return (mask.astype(np.float32) / 255.0)
+
+# =============================================================
+# 6. 경계의 halo 제거
+# =============================================================
+def remove_halo(mask_float: np.ndarray, erode_size=3, blur_size=7):
+    """
+    SAM이 만든 mask_float(0-1)을 입력받아 halo 제거 후 반환
+    """
+    mask = (mask_float * 255).astype(np.uint8)
+
+    # 1) erode로 경계 침식
+    kernel = np.ones((erode_size, erode_size), np.uint8)
+    eroded = cv2.erode(mask, kernel, iterations=1)
+
+    # 2) soft blur로 자연스럽게 보정
+    cleaned = cv2.GaussianBlur(eroded, (blur_size, blur_size), 0)
+
+    # 3) 0-1 스케일 복구
+    return cleaned.astype(np.float32) / 255.0
+
+# =============================================================
+# 7. 색상 decontamination
+# =============================================================
+def color_decontaminate(img_np, mask_float, strength=0.6):
+    """
+    img_np: HXW RGB
+    mask_float: 0-1 mask
+    strength: 0-1 (0: 원본 유지, 1: 완전 decontaminate)
+    """
+    mask_expanded = np.clip(mask_float + 0.15, 0, 1)
+    blurred_img = cv2.GaussianBlur(img_np, (11, 11), 0)
+
+    decont = img_np * mask_expanded[..., None] + blurred_img * (1 - mask_expanded[..., None]) * strength
+    return decont.astype(np.uint8)
