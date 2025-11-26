@@ -51,11 +51,15 @@ def decode_access_token(token: str) -> Optional[TokenData]:
 
 def get_user_by_username(db: Session, username: str) -> Optional[User]:
     """사용자명으로 사용자 조회"""
-    return db.query(User).filter(User.username == username).first()
+    return db.query(User).filter(User.username == username, User.is_deleted == False).first()
 
 def get_user_by_username_email(db: Session, username: str, email: str) -> Optional[User]:
     """사용자명 + 이메일으로 사용자 조회"""
-    return db.query(User).filter(User.username == username, User.email == email).first()
+    return (
+        db.query(User)
+        .filter(User.username == username, User.email == email, User.is_deleted == False)
+        .first()
+    )
 
 def reset_password(db:Session, user_data:PasswordReset) -> User:
     """비밀번호 변경"""
@@ -68,10 +72,10 @@ def reset_password(db:Session, user_data:PasswordReset) -> User:
     db.commit()
     db.refresh(user)
     return user
-    
+
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     """이메일로 사용자 조회"""
-    return db.query(User).filter(User.email == email).first()
+    return db.query(User).filter(User.email == email, User.is_deleted == False).first()
 
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     """사용자 인증"""
@@ -103,18 +107,18 @@ def create_user(db: Session, user_data: UserCreate) -> User:
 
 def update_user_profile(db: Session, user_id: int, update_data: dict) -> User:
     """사용자 프로필 업데이트"""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
     if not user:
         return None
-    
+
     # 메뉴 리스트가 있으면 JSON 문자열로 변환
     if "menu_items" in update_data and update_data["menu_items"]:
         update_data["menu_items"] = json.dumps(update_data["menu_items"], ensure_ascii=False)
-    
+
     for key, value in update_data.items():
         if value is not None and hasattr(user, key):
             setattr(user, key, value)
-    
+
     db.commit()
     db.refresh(user)
     return user
@@ -127,13 +131,31 @@ def get_user_from_token(db: Session, token: Optional[str]) -> Optional[User]:
     """
     if token is None:
         return None
-    
+
     try:
         token_data = decode_access_token(token)
         if token_data is None or token_data.username is None:
             return None
-        
+
         user = get_user_by_username(db, username=token_data.username)
         return user
     except Exception:
         return None
+
+
+def delete_user(db: Session, user_id: int) -> bool:
+    user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
+    if not user:
+        return False
+
+    user.is_deleted = True
+    
+    # 유저의 광고 요청 soft delete
+    for ad in user.ad_requests:
+        ad.is_deleted = True
+
+    # 유저의 메모리 soft delete
+    for mem in user.memories:
+        mem.is_deleted = True
+    db.commit()
+    return True
