@@ -20,7 +20,6 @@ export default function InstallPwaButton() {
     if (!deferredPrompt) return;
 
     deferredPrompt.prompt();
-    const choiceResult = await deferredPrompt.userChoice;
     setDeferredPrompt(null);
     setIsVisible(false); // 버튼 숨김
   };

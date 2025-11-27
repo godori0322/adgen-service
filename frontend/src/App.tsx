@@ -7,6 +7,8 @@ import VoiceHomePage from "./pages/home/VoiceHome";
 import MyPage from "./pages/mypage/MyPage";
 import PrivateRoute from "./router/PrivateRoute";
 import InstallPwaButton from "./components/common/InstallPwaButton";
+import FindAccountPage from "./pages/auth/FindAccount";
+import ResetPasswordPage from "./pages/auth/ResetPassword";
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/find" element={<FindAccountPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Route>
         {/* <Route path="/signup" element={<SignupPage />} /> */}
 

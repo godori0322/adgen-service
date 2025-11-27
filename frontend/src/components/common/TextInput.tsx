@@ -1,8 +1,6 @@
-
-
 interface TextInputProps {
   id: string;
-  label: string;
+  label?: string;
   type?: string;
   value: string;
   placeholder?: string;
@@ -10,6 +8,7 @@ interface TextInputProps {
   onBlur?: () => void;
   error?: string | null;
   size?: "normal" | "small";
+  empty?: boolean;
 }
 
 export default function TextInput({
@@ -22,13 +21,16 @@ export default function TextInput({
   onBlur,
   error,
   size = "normal",
+  empty = true,
 }: TextInputProps) {
   const sizeClass = size === "small" ? "px-3 py-2 text-sm" : "px-4 py-3 text-base";
   return (
     <div className="mb-3">
-      <label htmlFor={id} className="block text-sm font-medium text-gray-600 mb-1">
-        {label}
-      </label>
+      {label && (
+        <label htmlFor={id} className="block text-sm font-medium text-gray-600 mb-1">
+          {label}
+        </label>
+      )}
       <input
         id={id}
         name={id}
@@ -54,8 +56,10 @@ export default function TextInput({
         <p id={`${id}-error`} className="mt-1 text-xs text-red-600 min-h-[20px]">
           {error}
         </p>
-      ) : (
+      ) : empty ? (
         <p className="mt-1 text-xs min-h-[20px]">&nbsp;</p>
+      ) : (
+        <></>
       )}
     </div>
   );

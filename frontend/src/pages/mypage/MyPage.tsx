@@ -32,7 +32,7 @@ export default function MyPage() {
   const [alertContent, setAlertContent] = useState({
     title: "",
     message: "",
-    onConfirm: () => {},
+    onClose: () => {},
   });
   const transformMyPage = (data: any) => {
     const [openTime, closeTime] = data.business_hours.split("-");
@@ -91,7 +91,7 @@ export default function MyPage() {
       setAlertContent({
         title: "오류",
         message: err.message || "저장 중 오류가 발생하였습니다.",
-        onConfirm: () => {
+        onClose: () => {
           setShowAlert(false);
         },
       });
@@ -112,7 +112,7 @@ export default function MyPage() {
       setAlertContent({
         title: "회원 탈퇴 완료",
         message: res.message,
-        onConfirm: () => {
+        onClose: () => {
           resetMessages();
           logout();
         },
@@ -122,7 +122,7 @@ export default function MyPage() {
       setAlertContent({
         title: "오류",
         message: err.message || "오류가 발생했습니다.",
-        onConfirm: () => setShowAlert(false),
+        onClose: () => setShowAlert(false),
       });
       setShowAlert(true);
     }
@@ -221,7 +221,7 @@ export default function MyPage() {
         <AlertModal
           title={alertContent.title}
           message={alertContent.message}
-          onConfirm={alertContent.onConfirm}
+          onClose={alertContent.onClose}
         />
       )}
     </div>

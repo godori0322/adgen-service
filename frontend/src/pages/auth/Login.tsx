@@ -123,9 +123,13 @@ export default function LoginPage() {
             )}
           </div>
         </form>
-
+        <div className="text-center text-sm mt-2">
+          <Link to="/find" className="text-blue-600 hover:underline">
+            아이디 / 비밀번호 찾기
+          </Link>
+        </div>
         {/* 구분 라인 */}
-        <div className="flex items-center my-4">
+        <div className="flex items-center my-3">
           <div className="flex-grow h-px bg-gray-300"></div>
           <span className="px-2 text-sm text-gray-500">또는</span>
           <div className="flex-grow h-px bg-gray-300"></div>
