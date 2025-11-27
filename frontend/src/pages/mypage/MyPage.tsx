@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
-import { getMyPageRequest, putMyPageRequest } from "../../api/auth";
+import { deleteMe, getMyPageRequest, putMyPageRequest } from "../../api/auth";
+import AlertModal from "../../components/common/AlertModal";
+import ConfirmModal from "../../components/common/ConfirmModal";
+import SkeletonLoader from "../../components/common/SkeletonLoader";
 import { PageTitle, SectionTitle } from "../../components/common/Title";
+import HourRow from "../../components/myPage/HourRow";
 import MenuTagEditor from "../../components/myPage/MenuTagEditor";
 import ProfileRow from "../../components/myPage/ProfileRow";
-import HourRow from "../../components/myPage/HourRow";
-import SkeletonLoader from "../../components/common/SkeletonLoader";
+import { useAuth } from "../../context/AuthContext";
+import { useChat } from "../../context/ChatContext";
 
 interface MyPageUser {
   id: number;
@@ -18,13 +22,20 @@ interface MyPageUser {
 }
 
 export default function MyPage() {
+  const { logout } = useAuth();
+  const { resetMessages } = useChat();
   const [editMode, setEditMode] = useState(false);
   const [user, setUser] = useState<MyPageUser | null>(null);
   const [draft, setDraft] = useState<MyPageUser | null>(null);
-
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertContent, setAlertContent] = useState({
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
   const transformMyPage = (data: any) => {
     const [openTime, closeTime] = data.business_hours.split("-");
-
     return {
       id: data.id,
       userName: data.username,
@@ -56,16 +67,16 @@ export default function MyPage() {
 
   // 메뉴 handler
   const addMenuItem = (value: string) => {
-    if(!draft) return;
-    setDraft({...draft, menuItems: [...draft?.menuItems, value]});
+    if (!draft) return;
+    setDraft({ ...draft, menuItems: [...draft?.menuItems, value] });
   };
   const removeMenuItem = (index: number) => {
-    if(!draft) return;
+    if (!draft) return;
     setDraft({ ...draft, menuItems: draft.menuItems.filter((_, idx) => idx !== index) ?? [] });
   };
 
   // 저장/취소 handler
-  const handleSave = async() => {
+  const handleSave = async () => {
     if (!draft || !user) return;
     const payload = {
       business_type: draft.businessType,
@@ -75,9 +86,16 @@ export default function MyPage() {
     };
     try {
       await putMyPageRequest(payload);
-      setUser({...draft})
-    } catch (err) {
-      alert("저장 중 오류가 발생하였습니다.")
+      setUser({ ...draft });
+    } catch (err: any) {
+      setAlertContent({
+        title: "오류",
+        message: err.message || "저장 중 오류가 발생하였습니다.",
+        onConfirm: () => {
+          setShowAlert(false);
+        },
+      });
+      setShowAlert(true);
     }
     setEditMode(false);
   };
@@ -85,8 +103,30 @@ export default function MyPage() {
     if (user) setDraft({ ...user });
     setEditMode(false);
   };
+  const handleDeleteConfirm = async () => {
+    try {
+      const res = await deleteMe();
+      setShowDeleteModal(false);
 
-
+      // 모달 띄우기
+      setAlertContent({
+        title: "회원 탈퇴 완료",
+        message: res.message,
+        onConfirm: () => {
+          resetMessages();
+          logout();
+        },
+      });
+      setShowAlert(true);
+    } catch (err: any) {
+      setAlertContent({
+        title: "오류",
+        message: err.message || "오류가 발생했습니다.",
+        onConfirm: () => setShowAlert(false),
+      });
+      setShowAlert(true);
+    }
+  };
   return (
     <div className="relative pb-32">
       <PageTitle variant="section">마이페이지</PageTitle>
@@ -158,9 +198,32 @@ export default function MyPage() {
                 </button>
               </div>
             )}
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="w-full mt-6 text-sm text-red-500 hover:text-red-600"
+            >
+              회원탈퇴
+            </button>
           </>
         )}
       </section>
+      {showDeleteModal && (
+        <ConfirmModal
+          title="회원탈퇴"
+          message={`정말 탈퇴하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.`}
+          confirmText="탈퇴하기"
+          cancelText="취소"
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setShowDeleteModal(false)}
+        />
+      )}
+      {showAlert && (
+        <AlertModal
+          title={alertContent.title}
+          message={alertContent.message}
+          onConfirm={alertContent.onConfirm}
+        />
+      )}
     </div>
   );
 }
