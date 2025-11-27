@@ -357,7 +357,7 @@ def generate_poster_image(prompt: str, product_image_bytes: Optional[bytes] = No
         except:
             font = None
         
-        text = "🎨 Generated Image"
+        text = "Generated Image"
         text_bbox = draw.textbbox((0, 0), text, font=font)
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
