@@ -133,17 +133,26 @@ export function useVoiceChat() {
     }
   };
 
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   const onImageUpload = async (file: File) => {
     const key = sessionKeyRef.current;
     if (!key) return;
 
-    const imgUrl = URL.createObjectURL(file);
+    const base64Img = await fileToBase64(file);
+
     setUploadedImageFile(file);
     setNeedImage(false);
 
     await uploadImage(key, file);
 
-    addMessage({ role: "user", content: "", img: imgUrl });
+    addMessage({ role: "user", content: "", img: base64Img });
 
     addMessage({
       role: "assistant",
