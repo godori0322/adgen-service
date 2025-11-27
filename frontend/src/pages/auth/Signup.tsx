@@ -7,7 +7,6 @@ import TimePicker from "../../components/common/TimePicker";
 import { PageTitle } from "../../components/common/Title";
 import { isValidEmail, isValidPassword, isValidUsername } from "../../utils/validators";
 
-
 export default function SignupPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -116,7 +115,6 @@ export default function SignupPage() {
       setFormError(null);
       setEmailError(null);
       setPasswordError(null);
-      await new Promise((res) => setTimeout(res, 1500));
       navigate("/login", { state: { registered: true } });
     } catch (err: any) {
       setFormError(err.message || "알 수 없는 오류가 발생했습니다.");

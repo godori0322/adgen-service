@@ -1,4 +1,4 @@
-import { httpGet, httpPost, httpPostUrlEncoded, httpPut } from "./http";
+import { httpDelete, httpGet, httpPost, httpPostUrlEncoded, httpPut } from "./http";
 
 
 export type LoginResult = {
@@ -15,6 +15,13 @@ export type MyPageResult = {
   menu_items: string[];
   business_hours: string;
 };
+interface DeleteMeSuccess {
+  status: string;
+  message: string;
+}
+
+
+
 
 export async function loginRequest(username: string, password: string): Promise<LoginResult> {
   return httpPostUrlEncoded("/auth/login", { username, password, grant_type: "password" });
@@ -44,4 +51,8 @@ export async function putMyPageRequest(form: {
   business_hours: string;
 }) {
   return httpPut("/auth/me", form);
+}
+
+export async function deleteMe(): Promise<DeleteMeSuccess> {
+  return httpDelete("/auth/me");
 }

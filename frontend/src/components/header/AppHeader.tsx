@@ -72,8 +72,7 @@ export default function AppHeader() {
       {showConfirm && (
         <ConfirmModal
           title="새 대화 시작"
-          message={`현재 대화를 모두 삭제하고
-            새로 시작할까요?`}
+          message={`현재 대화를 모두 삭제하고\n새로 시작할까요?`}
           confirmText="네, 새로 시작"
           cancelText="아니요"
           onConfirm={confirmNewChat}
