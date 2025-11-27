@@ -6,6 +6,11 @@ export interface ChatMessage {
   content: string;
   img?: string;
   tempId?: number;
+  parsed?: {
+    idea: string;
+    caption: string;
+    hashtags?: string[];
+  };
 }
 
 interface ChatContextValue {
