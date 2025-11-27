@@ -8,7 +8,7 @@ from backend.app.core.database import get_db
 from backend.app.core.schemas import UserCreate, UserNameFind, PasswordFind, UserProfile, UserUpdate, PasswordReset, Token
 from backend.app.services import auth_service
 from backend.app.core.models import User
-import json
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -46,10 +46,17 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="이미 존재하는 이메일입니다"
         )
-    
+
     # 사용자 생성
-    user = auth_service.create_user(db, user_data)
-    return user
+    try:
+        user = auth_service.create_user(db, user_data)
+        return user
+
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="이미 존재하는 사용자명 또는 이메일입니다")
+
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="사용자 생성 중 서버 오류가 발생했습니다")
 
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -99,17 +106,17 @@ async def find_password(user_data: PasswordFind, db: Session = Depends(get_db)):
 
 @router.post("/reset/password")
 async def reset_password(user_data: PasswordReset, db: Session = Depends(get_db)):
-    updated_user = auth_service.reset_password(db, user_data);
-    if not updated_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="사용자를 찾을 수 없습니다.",
-        )
-    
-    return {
-        "status": "success",
-        "message": "비밀번호가 성공적으로 변경되었습니다."
-    }
+    """비밀번호 초기화"""
+    try:
+        updated_user = auth_service.reset_password(db, user_data)
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다."
+            )
+        return {"status": "success", "message": "비밀번호가 성공적으로 변경되었습니다."}
+
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="비밀번호 변경 중 서버 오류가 발생했습니다")
 
 
 @router.get("/me", response_model=UserProfile)
@@ -125,13 +132,19 @@ async def update_me(
 ):
     """현재 사용자 정보 수정"""
     update_data = user_update.model_dump(exclude_unset=True)
-    updated_user = auth_service.update_user_profile(db, current_user.id, update_data)
-    if not updated_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="사용자를 찾을 수 없습니다"
-        )
-    return updated_user
+    try:
+        updated_user = auth_service.update_user_profile(db, current_user.id, update_data)
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다."
+            )
+        return updated_user
+
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="이미 존재하는 정보가 포함되어 있습니다")
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="프로필 수정 중 서버 오류가 발생했습니다")
+
 
 @router.delete("/me", status_code=status.HTTP_200_OK)
 async def delete_me(
@@ -139,11 +152,13 @@ async def delete_me(
     db: Session = Depends(get_db),
 ):
     """사용자 탈퇴"""
-    success = auth_service.delete_user(db, current_user.id)
+    try:
+        success = auth_service.delete_user(db, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다"
+            )
+        return {"status": "success", "message": "회원 탈퇴가 완료되었습니다."}
 
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다"
-        )
-
-    return {"status": "success", "message": "회원 탈퇴가 완료되었습니다."}
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="회원 탈퇴 중 서버 오류가 발생했습니다")

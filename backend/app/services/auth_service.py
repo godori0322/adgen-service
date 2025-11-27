@@ -3,6 +3,7 @@
 
 import os
 from datetime import datetime, timedelta
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -66,12 +67,17 @@ def reset_password(db:Session, user_data:PasswordReset) -> User:
     user = get_user_by_username(db, user_data.username)
     if not user:
         return None
-        
-    hashed_password = get_password_hash(user_data.password)
-    user.hashed_password = hashed_password
-    db.commit()
-    db.refresh(user)
-    return user
+
+    try:
+        hashed_password = get_password_hash(user_data.password)
+        user.hashed_password = hashed_password
+        db.commit()
+        db.refresh(user)
+        return user
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise e
+
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     """이메일로 사용자 조회"""
@@ -90,7 +96,7 @@ def create_user(db: Session, user_data: UserCreate) -> User:
     """새 사용자 생성"""
     # 메뉴 리스트를 JSON 문자열로 변환
     menu_items_str = json.dumps(user_data.menu_items, ensure_ascii=False) if user_data.menu_items else None
-    
+
     db_user = User(
         username=user_data.username,
         email=user_data.email,
@@ -101,7 +107,15 @@ def create_user(db: Session, user_data: UserCreate) -> User:
         business_hours=user_data.business_hours
     )
     db.add(db_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        raise e
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise e
+
     db.refresh(db_user)
     return db_user
 
@@ -115,13 +129,17 @@ def update_user_profile(db: Session, user_id: int, update_data: dict) -> User:
     if "menu_items" in update_data and update_data["menu_items"]:
         update_data["menu_items"] = json.dumps(update_data["menu_items"], ensure_ascii=False)
 
-    for key, value in update_data.items():
-        if value is not None and hasattr(user, key):
-            setattr(user, key, value)
+    try:
+        for key, value in update_data.items():
+            if value is not None and hasattr(user, key):
+                setattr(user, key, value)
 
-    db.commit()
-    db.refresh(user)
-    return user
+        db.commit()
+        db.refresh(user)
+        return user
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise e
 
 def get_user_from_token(db: Session, token: Optional[str]) -> Optional[User]:
     """
@@ -148,14 +166,17 @@ def delete_user(db: Session, user_id: int) -> bool:
     if not user:
         return False
 
-    user.is_deleted = True
-    
-    # 유저의 광고 요청 soft delete
-    for ad in user.ad_requests:
-        ad.is_deleted = True
+    try:
+        user.is_deleted = True
 
-    # 유저의 메모리 soft delete
-    for mem in user.memories:
-        mem.is_deleted = True
-    db.commit()
-    return True
+        # soft delete
+        for ad in user.ad_requests:
+            ad.is_deleted = True
+        for mem in user.memories:
+            mem.is_deleted = True
+
+        db.commit()
+        return True
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise e
