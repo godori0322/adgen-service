@@ -40,7 +40,7 @@ export default function ChatBubbleList({
                 <ShareImageButton imageUrl={msg.img} parsed={msg.parsed} />
                 <button
                   onClick={() => downloadImage(msg.img!, `adgen-image-${Date.now()}.png`)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white rounded-lg px-4 py-2"
+                  className="bg-gray-600 hover:bg-gray-700 text-white rounded-lg px-4 py-2 mt-2"
                 >
                   ⬇️ 저장하기
                 </button>

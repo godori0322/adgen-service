@@ -27,7 +27,7 @@ export async function generateDialogueRequest(userInput: string, isLogin: boolea
   return await httpPost("/gpt/dialogue", body);
 }
 
-export async function generateDiffusionRequest(prompt: string, img: File, imageMode: ImageMode) {
+export async function generateDiffusionRequest(prompt: string, img: File) {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("product_image", img);
@@ -36,10 +36,11 @@ export async function generateDiffusionRequest(prompt: string, img: File, imageM
   return imgSrc;
 }
 
-export async function generateSyntheSizeDiffusionRequest(prompt: string, img: File) {
+export async function generateSyntheSizeDiffusionRequest(prompt: string, img: File, imageMode: ImageMode) {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("file", img);
+  form.append("imageMode", imageMode);
   const result = await httpPostImg("/diffusion/synthesize/auto/upload", form);
   const imgSrc = URL.createObjectURL(result);
   return imgSrc;
