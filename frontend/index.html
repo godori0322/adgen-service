@@ -1,10 +1,29 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+    <!-- Web Manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/png" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.png" />
+    <link rel="apple-touch-icon" sizes="1024x1024" href="/icons/icon-1024x1024.png" />
+
+    <!-- iOS PWA Support -->
+    <meta name="apple-mobile-web-app-title" content="AdGen" />
+    <!-- ↓ deprecated 경고는 떠도 계속 필요! -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+
+    <!-- Android / Chrome PWA Support (추가한 부분) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>AdGen</title>
   </head>
   <body>
     <div id="root"></div>
