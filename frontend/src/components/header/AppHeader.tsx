@@ -1,16 +1,24 @@
 // src/components/header/AppHeader.tsx
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useChat } from "../../context/ChatContext";
 
 export default function AppHeader() {
   const { isLogin, logout } = useAuth();
+  const { resetMessages } = useChat();
   const location = useLocation();
 
   const handleLogoClick = (e: React.MouseEvent) => {
     if (location.pathname === "/") {
       e.preventDefault();
-      window.location.reload();
+      if (!isLogin) {
+        window.location.reload();
+      }
     }
+  };
+  const handleLogout = () => {
+    resetMessages();
+    logout();
   };
 
   return (
@@ -32,7 +40,7 @@ export default function AppHeader() {
             <Link to="/mypage" className="hover:text-blue-600">
               마이페이지
             </Link>
-            <button onClick={logout} className="text-red-500 hover:text-red-600 font-medium">
+            <button onClick={handleLogout} className="text-red-500 hover:text-red-600 font-medium">
               로그아웃
             </button>
           </>

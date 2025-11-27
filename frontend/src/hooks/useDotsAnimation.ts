@@ -1,9 +1,8 @@
 import { useRef } from "react";
+import { useChat } from "../context/ChatContext";
 
-
-export function useDotsAnimation<T extends { tempId?: number; content: string }>(
-  setter: React.Dispatch<React.SetStateAction<T[]>>
-) {
+export function useDotsAnimation() {
+  const { updateTempMessage } = useChat();
   const timerRef = useRef<number | null>(null);
   const stepRef = useRef(0);
 
@@ -11,9 +10,7 @@ export function useDotsAnimation<T extends { tempId?: number; content: string }>
     const frames = [".", "..", "..."];
     timerRef.current = window.setInterval(() => {
       stepRef.current = (stepRef.current + 1) % frames.length;
-      setter((prev) =>
-        prev.map((m: any) => (m.tempId === tempId ? { ...m, content: frames[stepRef.current] } : m))
-      );
+      updateTempMessage(tempId, { content: frames[stepRef.current] });
     }, 400);
   };
 
