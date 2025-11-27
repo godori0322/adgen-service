@@ -1,5 +1,9 @@
 import { useRef, useState } from "react";
-import { generateDialogueRequest, generateDiffusionRequest, uploadImage } from "../api/generate";
+import {
+  generateDialogueRequest,
+  generateSyntheSizeDiffusionRequest,
+  uploadImage,
+} from "../api/generate";
 import type { ImageMode } from "../components/voice/ImageModeSelectorBubble";
 import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
 import { useAuth } from "../context/AuthContext";
@@ -104,7 +108,11 @@ export function useVoiceChat() {
           tempId: imgTempId,
         });
 
-        const imgSrc = await generateDiffusionRequest(imagePrompt, uploadedImageFile, imageMode);
+        const imgSrc = await generateSyntheSizeDiffusionRequest(
+          imagePrompt,
+          uploadedImageFile,
+          imageMode
+        );
 
         updateTempMessage(imgTempId, {
           content: "",
