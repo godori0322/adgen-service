@@ -83,7 +83,7 @@ export function useVoiceChat() {
 
         const imgSrc = await generateSyntheSizeDiffusionRequest(imagePrompt, uploadedImageFile);
         // 이미지 채우기
-        updateTempMessage(imgTempId, { content: "", img: imgSrc });
+        updateTempMessage(imgTempId, { content: "", img: imgSrc, parsed: adRes.final_content });
       }
 
       if (adRes.is_complete) setUploadedImageFile(null);
