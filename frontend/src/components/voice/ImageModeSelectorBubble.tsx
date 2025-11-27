@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export type ImageMode = "rigid" | "balanced" | "creative";
 
 const MODE_OPTIONS: { key: ImageMode; title: string; desc: string; color: string }[] = [
@@ -26,18 +28,37 @@ export default function ImageModeSelectorBubble({
 }: {
   onSelect: (mode: ImageMode) => void;
 }) {
+  const [selectedMode, setSelectedMode] = useState<ImageMode | null>(null);
+
+  const handleSelect = (mode: ImageMode) => {
+    if (selectedMode) return; // 이미 선택되어 있으면 무시
+    setSelectedMode(mode);
+    onSelect(mode); // 자동 진행
+  };
+
   return (
     <div className="flex flex-col gap-2 mt-3">
-      {MODE_OPTIONS.map((option) => (
-        <button
-          key={option.key}
-          onClick={() => onSelect(option.key)}
-          className={`p-3 rounded-xl text-white text-left shadow-sm hover:opacity-90 transition ${option.color}`}
-        >
-          <p className="font-bold">{option.title}</p>
-          <p className="text-sm opacity-80">{option.desc}</p>
-        </button>
-      ))}
+      {MODE_OPTIONS.map((option) => {
+        const isSelected = selectedMode === option.key;
+        const isDisabled = selectedMode && !isSelected;
+
+        return (
+          <button
+            key={option.key}
+            disabled={!!isDisabled}
+            onClick={() => handleSelect(option.key)}
+            className={`
+              p-3 rounded-xl text-white text-left shadow-md transition
+              ${option.color}
+              ${isSelected ? "ring-4 ring-yellow-300" : ""}
+              ${isDisabled ? "opacity-40 cursor-not-allowed" : "hover:opacity-90"}
+            `}
+          >
+            <p className="font-bold">{option.title}</p>
+            <p className="text-sm opacity-90">{option.desc}</p>
+          </button>
+        );
+      })}
     </div>
   );
 }
