@@ -41,9 +41,8 @@ export async function generateSyntheSizeDiffusionRequest(prompt: string, img: Fi
   form.append("prompt", prompt);
   form.append("file", img);
   form.append("imageMode", imageMode);
-  const result = await httpPostImg("/diffusion/synthesize/auto/upload", form);
-  const imgSrc = URL.createObjectURL(result);
-  return imgSrc;
+  return await httpPostImg("/diffusion/synthesize/auto/upload", form);
+
 }
 
 export async function uploadImage(sessionKey: string, img: File) {

@@ -17,11 +17,6 @@ export interface ChatMessage {
   content?: string;
   img?: string;
   tempId?: number;
-  parsed?: {
-    idea: string;
-    caption: string;
-    hashtags?: string[];
-  };
   modeSelect?: boolean;
 }
 
@@ -108,17 +103,24 @@ export function useVoiceChat() {
           tempId: imgTempId,
         });
 
-        const imgSrc = await generateSyntheSizeDiffusionRequest(
+        const img = await generateSyntheSizeDiffusionRequest(
           imagePrompt,
           uploadedImageFile,
           imageMode
         );
+        let file: File;
 
-        updateTempMessage(imgTempId, {
-          content: "",
-          img: imgSrc,
-          parsed: adRes.final_content,
-        });
+        if (img instanceof File) {
+          file = img; 
+        } else {
+          file = new File([img], "result.png", {
+            type: img.type || "image/png",
+            lastModified: Date.now(),
+          });
+        }
+        const base64Img = await fileToBase64(file);
+
+        updateTempMessage(imgTempId, { content: "", img: base64Img });
       }
 
       if (adRes.is_complete) setUploadedImageFile(null);

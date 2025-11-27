@@ -12,26 +12,9 @@ interface ShareImageButtonProps {
   parsed?: GptParsed; // GPT 결과 전달받기
 }
 
-export default function ShareImageButton({ imageUrl, parsed }: ShareImageButtonProps) {
+export default function ShareImageButton({ imageUrl }: ShareImageButtonProps) {
   const [isSharing, setIsSharing] = useState(false);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
-
-  const buildShareData = (file: File) => {
-    // 기본 메시지 fallback
-    let title = "내가 만든 광고 이미지";
-    let text = "AI로 만든 광고 이미지입니다!";
-
-    if (parsed) {
-      if (parsed.idea?.trim()) title = parsed.idea.trim();
-      if (parsed.caption?.trim()) text = parsed.caption.trim();
-
-      if (parsed.hashtags?.length) {
-        text += `\n${parsed.hashtags.join(" ")}`;
-      }
-    }
-
-    return { title, text, files: [file] };
-  };
 
   const handleShare = async () => {
     try {
@@ -41,14 +24,13 @@ export default function ShareImageButton({ imageUrl, parsed }: ShareImageButtonP
       const blob = await res.blob();
       const file = new File([blob], "adgen-result.png", { type: blob.type });
 
-      const shareData = buildShareData(file);
+      const shareData = { files: [file] };
 
       if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData);
       } else {
-        alert("공유 기능이 지원되지 않습니다 🥲\n다운로드 후 직접 공유해주세요!");
         setAlertMessage(
-          "📱 공유 기능이 지원되지 않는 환경입니다.\n이미지를 다운로드하여 직접 공유해주세요!"
+          `📱 공유 기능이 지원되지 않는 환경입니다.\n이미지를 다운로드하여 직접 공유해주세요!`
         );
       }
     } catch (err) {
