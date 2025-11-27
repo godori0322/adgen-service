@@ -11,10 +11,10 @@ from datetime import datetime
 from enum import Enum
 from openai import AsyncOpenAI
 from langchain_openai import ChatOpenAI
-from langchain_classic.chains import ConversationChain
-from langchain_classic.memory import ConversationBufferWindowMemory
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
+from langchain.chains import ConversationChain
+from langchain.memory import ConversationBufferWindowMemory
+from langchain.prompts import PromptTemplate
+from langchain.output_parsers import PydanticOutputParser
 from backend.app.core.schemas import DialogueGPTResponse_AD, DialogueGPTResponse_Profile, FinalContentSchema
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -433,7 +433,7 @@ def _create_new_chain(user_context: dict = None, first_input: str = None) -> Con
     
     # LangChain LLM 설정
     llm = ChatOpenAI(
-        model="gpt-4o", 
+        model_name="gpt-4o", 
         temperature=0.7,
         openai_api_key=os.getenv("OPENAI_API_KEY")
     )
@@ -538,7 +538,7 @@ async def generate_conversation_response(
             
             # LangChain 설정
             llm = ChatOpenAI(
-                model="gpt-4o",
+                model_name="gpt-4o",
                 temperature=0.7,
                 openai_api_key=os.getenv("OPENAI_API_KEY")
             )
@@ -602,6 +602,15 @@ async def generate_conversation_response(
         
         # 대화 완료 시: 대화 기록 추출 + Vision 통합 (세션 삭제는 gpt.py에서 처리)
         if response.is_complete and session_key in CONVERSATION_MEMORIES:
+            # 디버깅: 세션 상태 확인
+            print(f"🔍 [DEBUG] 세션 키: {session_key}")
+            print(f"🔍 [DEBUG] product_image 존재 여부: {'product_image' in CONVERSATION_MEMORIES[session_key]}")
+            if "product_image" in CONVERSATION_MEMORIES[session_key]:
+                img_data = CONVERSATION_MEMORIES[session_key]["product_image"]
+                print(f"🔍 [DEBUG] product_image 길이: {len(img_data) if img_data else 0} bytes")
+            print(f"🔍 [DEBUG] intent: {intent}")
+            print(f"🔍 [DEBUG] response.final_content 존재: {response.final_content is not None}")
+            
             # 대화 기록 추출
             messages = memory_obj.chat_memory.messages
             conversation_history = [
@@ -802,8 +811,9 @@ async def generate_detailed_image_prompt_with_vision(
     Returns:
         Stable Diffusion용 상세 영어 프롬프트
     """
+    print("-------strategy_proposal:----------\n", strategy_proposal)
     try:
-        # Vision API 호출용 프롬프트
+        # Vision API 호출용 프롬프트 (단순화 버전)
         vision_prompt = f"""
 You are a professional product photography director specializing in commercial advertising.
 
@@ -813,8 +823,6 @@ Your task is to create a Stable Diffusion prompt that describes the BACKGROUND S
 
 === Business Information ===
 Business Type: {business_info.get('business_type', 'unknown')}
-Location: {business_info.get('location', 'unknown')}
-Main Products: {business_info.get('menu_items', 'unknown')}
 
 === Approved Marketing Strategy ===
 {strategy_proposal}
@@ -826,20 +834,20 @@ Main Products: {business_info.get('menu_items', 'unknown')}
 
 === Required Prompt Structure (ALL IN ENGLISH) ===
 
-**Part 1: Environment & Atmosphere (30-40 words)**
+**Part 1: Environment & Atmosphere**
 - Setting that matches the strategy's visual concept
 - Lighting (warm, soft, dramatic, natural, golden hour)
 - Overall mood and atmosphere
 
-**Part 2: Background Elements (20-30 words)**
+**Part 2: Background Elements**
 - People, objects, decorations matching target audience
 - Specify "in the background, slightly out of focus" or "blurred background"
 
-**Part 3: Photography Style (15-20 words)**
+**Part 3: Photography Style**
 - "cinematic photography", "commercial photography", "professional product advertising"
 - "shallow depth of field", "bokeh effect"
 
-**Part 4: Product Placement (20-30 words)**
+**Part 4: Product Placement**
 - Describe the product you see in the image (be specific about what you observe)
 - Must include: "in the foreground", "on the table", "sharp and detailed", "product hero shot"
 
@@ -855,6 +863,7 @@ the new seasonal drink on the table in the foreground, sharp and detailed, produ
 - Product description comes LAST (foreground)
 - Background must be "out of focus" or "blurred"
 - Product must be "sharp", "detailed", "foreground"
+-Do not exceed 77 tokens
 
 Now analyze the product image and generate the prompt:
         """.strip()
@@ -884,15 +893,98 @@ Now analyze the product image and generate the prompt:
         )
         
         enhanced_prompt = response.choices[0].message.content.strip()
-        print(f"✅ Vision 분석 완료: {enhanced_prompt[:100]}...")
+        
+        # === 실패 판정 로직 ===
+        
+        # 1. 거부 메시지 감지
+        rejection_words = ["sorry", "can't", "cannot", "unable"]
+        if any(word in enhanced_prompt.lower() for word in rejection_words):
+            print(f"⚠️  Vision API 거부 감지: {enhanced_prompt[:100]}")
+            raise ValueError("Vision API content policy rejection")
+        
+        # 2. 너무 짧은 응답 (15단어 미만)
+        word_count = len(enhanced_prompt.split())
+        if word_count < 15:
+            print(f"⚠️  응답이 너무 짧음: {word_count}단어")
+            raise ValueError(f"Vision API response too short: {word_count} words")
+        
+        # === 성공: 토큰 검증 및 반환 ===
+        
+        estimated_tokens = int(word_count * 1.3)  # 보수적 추정
+        
+        if estimated_tokens > 77:
+            print(f"⚠️  프롬프트가 너무 김 ({estimated_tokens} 토큰 추정), 잘라냄")
+            # 단어 수 기준으로 자르기 (77토큰 ≈ 60단어)
+            words = enhanced_prompt.split()[:60]
+            enhanced_prompt = " ".join(words)
+        
+        print(f"✅ Vision 분석 완료 ({estimated_tokens} 토큰 추정): {enhanced_prompt}")
         
         return enhanced_prompt
         
     except Exception as e:
-        print(f"❌ Vision API 호출 실패: {e}")
-        # Fallback: 전략 텍스트 기반 기본 프롬프트 생성
-        fallback = f"Professional product photography for {business_info.get('business_type', 'business')}, high quality, modern style"
-        return fallback
+        print(f"❌ Vision API 실패: {e}")
+        # Fallback: strategy_proposal 기반 프롬프트 생성
+        print("🔄 Fallback: strategy_proposal로 이미지 프롬프트 생성 시도...")
+        
+        try:
+            fallback_prompt = f"""
+Create a Stable Diffusion prompt for product advertising based on this marketing strategy.
+
+Business Type: {business_info.get('business_type', 'unknown')}
+
+Marketing Strategy:
+{strategy_proposal}
+
+Generate a detailed prompt following this format:
+"[environment with lighting], [background elements, blurred], cinematic photography, shallow depth of field, product in foreground, sharp and detailed"
+
+Requirements:
+- Write in English only
+- Maximum 77 tokens
+- Include background scene description
+- Specify "blurred background" or "out of focus"
+- End with "product in foreground, sharp and detailed"
+
+Your prompt:
+            """.strip()
+            
+            fallback_response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": fallback_prompt}],
+                max_tokens=300,
+                temperature=0.7
+            )
+            
+            fallback_enhanced = fallback_response.choices[0].message.content.strip()
+            
+            # Fallback도 동일한 검증 적용
+            rejection_words = ["sorry", "can't", "cannot", "unable"]
+            if any(word in fallback_enhanced.lower() for word in rejection_words):
+                print(f"⚠️  Fallback도 거부됨: {fallback_enhanced[:100]}")
+                raise ValueError("Fallback also rejected")
+            
+            word_count = len(fallback_enhanced.split())
+            if word_count < 15:
+                print(f"⚠️  Fallback 응답이 너무 짧음: {word_count}단어")
+                raise ValueError(f"Fallback response too short: {word_count} words")
+            
+            # 77토큰 제한 검증
+            estimated_tokens = int(word_count * 1.3)
+            if estimated_tokens > 77:
+                print(f"⚠️  Fallback 프롬프트가 너무 김 ({estimated_tokens} 토큰), 잘라냄")
+                words = fallback_enhanced.split()[:60]
+                fallback_enhanced = " ".join(words)
+            
+            print(f"✅ Fallback 프롬프트 생성 성공 ({estimated_tokens} 토큰): {fallback_enhanced}")
+            return fallback_enhanced
+            
+        except Exception as fallback_error:
+            print(f"❌ Fallback도 실패: {fallback_error}")
+            # 최종 기본값
+            default_fallback = f"Professional product photography for {business_info.get('business_type', 'business')}, cinematic lighting, blurred background, sharp product in foreground, high quality commercial style"
+            print(f"⚠️  최종 기본값 사용: {default_fallback}")
+            return default_fallback
 
 
 async def extract_city_name_english(location: str) -> str:

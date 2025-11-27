@@ -155,8 +155,8 @@ def synthesize_image(
     product_image: Image.Image,
     mask_image: Image.Image,
     full_image: Image.Image,
-    control_weight: float = 1.0,
-    ip_adapter_scale: float = 0.7,
+    control_weight: float = 0.5,
+    ip_adapter_scale: float = 0.2,
 ) -> Image.Image:
     """
     SD1.5 + ControlNet(Depth) + IP-Adapter(SD1.5)를 사용해서
