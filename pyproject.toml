@@ -29,9 +29,6 @@ dependencies = [
     "argon2-cffi>=23.1.0",
     # AI & ML
     "openai>=2.7.1",
-    "torch==2.3.1",
-    "torchaudio==2.3.1",
-    "torchvision==0.18.1",
     "diffusers>=0.30.0",
     "transformers>=4.44.0",
     "accelerate>=0.34.0",
@@ -39,7 +36,7 @@ dependencies = [
     # Image Processing
     "pillow>=11.3.0",
     # Data Processing
-    "numpy>=2.1.2",
+    "numpy<2",
     "pandas>=2.3.3",
     # Utilities
     "python-dotenv>=1.2.1",
