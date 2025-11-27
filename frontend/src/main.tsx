@@ -6,6 +6,10 @@ import { AuthProvider } from "./context/AuthContext";
 import { ChatProvider } from "./context/ChatContext";
 import "./styles/global.css";
 import "./styles/tailwind.css";
+import { registerSW } from "virtual:pwa-register";
+
+registerSW();
+
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -18,3 +22,4 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
