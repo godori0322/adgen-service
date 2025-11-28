@@ -14,7 +14,7 @@ dependencies = [
     "uvicorn[standard]>=0.38.0",
     "python-multipart>=0.0.20",
 
-    # Database
+    # Database & ORM
     "sqlalchemy>=2.0.0",
     "psycopg2-binary>=2.9.9",
     "pgvector>=0.2.5",
@@ -40,17 +40,22 @@ dependencies = [
     # Image Processing
     "pillow>=11.3.0",
 
-    # Data
-    "numpy<2",
+    # Data Processing
+    "numpy>=2.1.2",
     "pandas>=2.3.3",
 
-    # Utils
+    # Utilities
     "python-dotenv>=1.2.1",
     "requests>=2.31.0",
     "httpx>=0.24.0",
     "tqdm>=4.67.1",
 
-    # Frontend
+    # Development & Notebook
+    "jupyter>=1.1.1",
+    "ipykernel>=7.1.0",
+    "matplotlib>=3.10.7",
+
+    # Frontend (optional)
     "streamlit>=1.51.0",
     "opencv-python>=4.11.0.86",
 

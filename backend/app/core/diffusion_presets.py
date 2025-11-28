@@ -13,8 +13,8 @@ PRESET_TABLE = {
         "ip_adapter_scale": 0.35,
     },
     CompositionMode.creative: {
-        "control_weight": 0.35,
-        "ip_adapter_scale": 0.18,
+        "control_weight": 0.65,
+        "ip_adapter_scale": 0.12,
     },
 }
 
