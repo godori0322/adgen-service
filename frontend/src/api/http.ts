@@ -3,7 +3,8 @@
 const BASE_URL = import.meta.env.VITE_FAST_API_URL + "/api";
 
 const authHeader = (): Record<string, string> => {
-  const token = sessionStorage.getItem("token");
+  const token = sessionStorage.getItem("accessToken");
+  console.log(token);
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
