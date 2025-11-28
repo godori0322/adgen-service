@@ -48,10 +48,49 @@ class GPTResponse(BaseResponse):
     caption: str = Field(..., description="홍보용 문구")
     hashtags: List[str] = Field(..., description="자동 생성된 해시태그 목록")
     image_prompt: str = Field(..., description="이미지 생성용 프롬프트")
+    bgm_prompt: Optional[str] = Field(
+        default=None,
+        description="Stable Audio용 BGM 프롬프트(장르/무드/템포 등 영어 설명)",
+    )    
 
 
 class AdGenerateResponse(GPTResponse):
     image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
+    audio_url: Optional[str] = Field(None, description="생성된 BGM 파일의 절대 URL")
+
+# ==================== Audio Geneartion (Stable Audio Open) ====================
+class AudioGenerationRequest(BaseModel):
+    """
+    Stable Audio Open을 통한 BGM 생성을 위한 요청 스키마 정의.
+    지금은 최소한으로 prompt + duration_sec만 받는 구조.
+    """
+    prompt: str = Field(
+        ...,
+        description="배경음악에 대한 자연어 설명 (예: 따뜻한 재즈 느낌으로 20초짜리 GBM)",
+    )
+    duration_sec: float = Field(
+        20.0,
+        ge=1.0,
+        le=30.0,
+        description="음악 길이(초). musicgen 최대 약 47초. PoC는 15초 제한",
+    )
+
+class AudioGenerationResponse(BaseResponse):
+    """
+    BGM 생성 결과 응답 스키마 정의.
+    BaseResponse를 상속해서 status/message/timestamp를 함께 반환.
+    """
+    audio_url: str = Field(..., description="생성된 오디오를 재생할 수 있는 URL 경로")
+    # 예: /media/audio/3f2a9c4b0e4d4c8f8a12d9f3ab8d90a1.wav
+
+    prompt: str = Field(..., description="모델에 전달된 최종 프롬프트 문자열")
+    # 나중에 프리셋/영문 설명을 합치면, 실제 사용된 full prompt를 넣을 수 있음
+
+    duration_sec: float = Field(..., description="생성 요청에 사용된 길이(초)")
+
+
+
+
 
 
 # ==================== Diffusion 관련 스키마 ====================
@@ -164,6 +203,10 @@ class FinalContentSchema(BaseModel):
     caption: str = Field(..., description="홍보용 문구")
     hashtags: List[str] = Field(..., description="자동 생성된 해시태그 목록")
     image_prompt: str = Field(..., description="이미지 생성용 프롬프트")
+    bgm_prompt: Optional[str] = Field(
+        default=None,
+        description="Stable Audio용 BGM 분위기/스타일 프롬프트",
+    )
 
 
 # GPT 내부 응답(대화 상태 - 기본형)

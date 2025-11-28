@@ -37,7 +37,8 @@ async def generate_marketing_content(req: GPTRequest):
             idea=result["idea"],
             caption=result["caption"],
             hashtags=result["hashtags"],
-            image_prompt=result["image_prompt"]
+            image_prompt=result["image_prompt"],
+            bgm_prompt=result.get("bgm_prompt"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

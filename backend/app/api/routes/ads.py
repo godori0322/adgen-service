@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from backend.app.services.weather_service import get_weather
 from backend.app.services.gpt_service import generate_marketing_idea
 from backend.app.services.diffusion_service import synthesize_image
-from backend.app.core.schemas import GPTRequest, AdGenerateResponse
+from backend.app.services.audio_service import generate_bgm_and_save
+from backend.app.core.schemas import GPTRequest, AdGenerateResponse, AudioGenerationRequest
 from backend.app.core.database import get_db
 from backend.app.core.models import User, AdRequest
 from backend.app.services import auth_service
@@ -80,12 +81,22 @@ async def generate_ad(
         caption = gpt_result.get("caption", "")
         hashtags = gpt_result.get("hashtags", [])
         image_prompt = gpt_result.get("image_prompt", "")
+        bgm_prompt = gpt_result.get("bgm_prompt", "")
 
         print(f"[GPT 아이디어] {idea}")
         print(f"[이미지 프롬프트] {image_prompt}")
+        print(f"[BGM 프롬프트] {bgm_prompt}")
 
+        # 1) 이미지 생성
         image_bytes = synthesize_image(image_prompt)
         image_base64 = base64.b64encode(image_bytes).decode("ascii")
+
+        # 2) BGM 생성 (replicate musicgen) : AudioGenerationRequest에 bgm_prompt 그대로 넣어줌
+        audio_req = AudioGenerationRequest(
+            prompt=bgm_prompt,
+            duration_sec=12.0,  # 12.0초로 고정
+        )
+        relative_audio_path = generate_bgm_and_save(audio_req)
 
         # GPT 출력 텍스트 생성
         gpt_output_text = f"아이디어: {idea}\n캡션: {caption}\n해시태그: {', '.join(hashtags)}"
@@ -111,7 +122,8 @@ async def generate_ad(
             caption=caption,
             hashtags=hashtags,
             image_prompt=image_prompt,
-            image_base64=image_base64
+            image_base64=image_base64,
+            audio_url=full_audio_url,   # 절대 bgm url
         )
     except Exception as e:
         db.rollback()
