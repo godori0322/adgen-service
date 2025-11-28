@@ -1,14 +1,15 @@
 import { Route, Routes } from "react-router-dom";
+import InstallPwaButton from "./components/common/InstallPwaButton";
 import AuthLayout from "./components/layout/AuthLayout";
 import MainLayout from "./components/layout/MainLayout";
+import FindAccountPage from "./pages/auth/FindAccount";
 import LoginPage from "./pages/auth/Login";
+import ResetPasswordPage from "./pages/auth/ResetPassword";
 import SignupPage from "./pages/auth/Signup";
 import VoiceHomePage from "./pages/home/VoiceHome";
 import MyPage from "./pages/mypage/MyPage";
+import NotFoundPage from "./pages/NotFound";
 import PrivateRoute from "./router/PrivateRoute";
-import InstallPwaButton from "./components/common/InstallPwaButton";
-import FindAccountPage from "./pages/auth/FindAccount";
-import ResetPasswordPage from "./pages/auth/ResetPassword";
 
 function App() {
   return (
@@ -21,12 +22,10 @@ function App() {
           <Route path="/find" element={<FindAccountPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Route>
-        {/* <Route path="/signup" element={<SignupPage />} /> */}
 
         <Route element={<MainLayout />}>
           {/* 로그인 없이 접근 가능 */}
           <Route path="/" element={<VoiceHomePage />} />
-          {/* <Route path="/ad" element={<AdResultPage />} /> */}
 
           {/* 로그인 필요한 페이지 */}
           <Route
@@ -37,18 +36,9 @@ function App() {
               </PrivateRoute>
             }
           />
-
-          {/* <Route
-            path="/history"
-            element={
-              <PrivateRoute>
-                <HistoryPage />
-              </PrivateRoute>
-            }
-          /> */}
+          {/* 404 에러 페이지 */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
-
-        <Route path="*" element={<div>404 NOT FOUND</div>} />
       </Routes>
       <InstallPwaButton />
     </>
