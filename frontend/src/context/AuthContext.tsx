@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
+import { isTokenExpired } from "../utils/auth";
 
 interface AuthContextValue {
   token: string | null;
@@ -9,31 +9,48 @@ interface AuthContextValue {
   logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null)
+const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({children}: {children: React.ReactNode}) {
-  const [token, setToken] = useState<string | null>(null);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
-  
+  const [token, setToken] = useState<string | null>(null);
+  const [isLogin, setIsLogin] = useState(false);
+
+  // 앱 로드 시 토큰 확인
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (storedToken) setToken(storedToken);
+    const storedToken = sessionStorage.getItem("accessToken");
+
+    if (!storedToken) return;
+
+    if (isTokenExpired(storedToken)) {
+      console.log("🔒 토큰 만료 → 자동 로그아웃");
+      sessionStorage.removeItem("accessToken");
+      setToken(null);
+      setIsLogin(false);
+      return;
+    }
+
+    setToken(storedToken);
+    setIsLogin(true);
   }, []);
 
-  const login = (token: string) => {
-    setToken(token);
-    localStorage.setItem('token', token);
-  }
+  // 로그인
+  const login = (newToken: string) => {
+    sessionStorage.setItem("accessToken", newToken);
+    setToken(newToken);
+    setIsLogin(true);
+  };
 
+  // 로그아웃
   const logout = () => {
+    sessionStorage.removeItem("accessToken");
     setToken(null);
-    localStorage.removeItem('token');
+    setIsLogin(false);
     navigate("/");
-    window.location.reload();
   };
 
   return (
-    <AuthContext.Provider value={{ token, isLogin: !!token, login, logout }}>
+    <AuthContext.Provider value={{ token, isLogin, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
