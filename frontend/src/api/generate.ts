@@ -1,3 +1,4 @@
+import type { ImageMode } from "../components/voice/ImageModeSelectorBubble";
 import { getGuestSessionId } from "../utils/guestSession";
 import { httpPost, httpPostForm, httpPostImg } from "./http";
 
@@ -33,6 +34,15 @@ export async function generateDiffusionRequest(prompt: string, img: File) {
   const result = await httpPostImg("/diffusion/generate", form);
   const imgSrc = URL.createObjectURL(result);
   return imgSrc;
+}
+
+export async function generateSyntheSizeDiffusionRequest(prompt: string, img: File, imageMode: ImageMode) {
+  const form = new FormData();
+  form.append("prompt", prompt);
+  form.append("file", img);
+  form.append("imageMode", imageMode);
+  return await httpPostImg("/diffusion/synthesize/auto/upload", form);
+
 }
 
 export async function uploadImage(sessionKey: string, img: File) {

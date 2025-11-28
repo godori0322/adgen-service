@@ -1,5 +1,4 @@
-export const IMAGE_GUIDE_MESSAGE = `
-🖼️ 제품 사진 등 이미지를 업로드해주세요!
+export const IMAGE_GUIDE_MESSAGE = `🖼️ 제품 사진 등 이미지를 업로드해주세요!
 
 더 좋은 광고 이미지를 만들기 위해 이렇게 촬영해보세요 📸👇
 

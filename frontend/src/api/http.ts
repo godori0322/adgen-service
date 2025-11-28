@@ -97,6 +97,16 @@ export async function httpPut(url: string, body: any) {
     },
     body: JSON.stringify(body),
   });
+  if (!res.ok) {
+    let errorMessage = `HTTP ${res.status}`;
+    try {
+      const errorData = await res.json();
+      if (errorData?.detail) errorMessage = errorData.detail;
+    } catch {
+      errorMessage = "오류가 발생했습니다.";
+    }
+    throw new Error(errorMessage);
+  }
   return res.json();
 }
 
@@ -108,5 +118,15 @@ export async function httpDelete(url: string) {
       ...authHeader(),
     },
   });
+  if (!res.ok) {
+    let errorMessage = `HTTP ${res.status}`;
+    try {
+      const errorData = await res.json();
+      if (errorData?.detail) errorMessage = errorData.detail;
+    } catch {
+      errorMessage = "오류가 발생했습니다.";
+    }
+    throw new Error(errorMessage);
+  }
   return res.json();
 }

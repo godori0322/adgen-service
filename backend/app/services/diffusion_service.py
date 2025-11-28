@@ -30,7 +30,7 @@ os.environ.setdefault("HF_HOME", "/home/shared/models")
 os.environ.setdefault("DIFFUSERS_CACHE", "/home/shared/models")
 os.environ.setdefault("TRANSFORMERS_CACHE", "/home/shared/models")
 os.environ.setdefault("TORCH_HOME", "/home/shared/models")
-os.environ.setdefault("SAM_MODEL_PATH", "/home/shared/models/sam_vit_h_4b8939.pth")
+os.environ.setdefault("SAM_MODEL_PATH", "/home/shared/models/sam_vit_b_01ec64.pth")
 
 HF_CACHE_DIR = "/home/shared/models"  # 공용 캐시/모델 디렉터리 경로 상수
 
@@ -155,8 +155,8 @@ def synthesize_image(
     product_image: Image.Image,
     mask_image: Image.Image,
     full_image: Image.Image,
-    control_weight: float = 1.0,
-    ip_adapter_scale: float = 0.7,
+    control_weight: float = 0.5,
+    ip_adapter_scale: float = 0.2,
 ) -> Image.Image:
     """
     SD1.5 + ControlNet(Depth) + IP-Adapter(SD1.5)를 사용해서

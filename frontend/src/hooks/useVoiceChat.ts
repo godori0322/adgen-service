@@ -1,133 +1,133 @@
 import { useRef, useState } from "react";
-import { generateDialogueRequest, generateDiffusionRequest, uploadImage } from "../api/generate";
+import {
+  generateDialogueRequest,
+  generateSyntheSizeDiffusionRequest,
+  uploadImage,
+} from "../api/generate";
+import type { ImageMode } from "../components/voice/ImageModeSelectorBubble";
 import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
 import { useAuth } from "../context/AuthContext";
+import { useChat } from "../context/ChatContext";
 import { formatChatResponse } from "../utils/chatFormatter";
 import { useDotsAnimation } from "./useDotsAnimation";
 import { useWhisper } from "./useWhisper";
 
-interface ChatMessage {
+export interface ChatMessage {
   role: "user" | "assistant";
-  content: string;
+  content?: string;
   img?: string;
-  tempId?: number; // 임시 메시지 식별용
+  tempId?: number;
+  modeSelect?: boolean;
 }
 
 export function useVoiceChat() {
   const { isLogin } = useAuth();
   const [isWorking, setIsWorking] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const { startDots, stopDots } = useDotsAnimation(setMessages);
+  const { messages, addMessage, updateTempMessage } = useChat();
+  const { startDots, stopDots } = useDotsAnimation();
   const [needImage, setNeedImage] = useState(false);
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
+  const [imageMode, setImageMode] = useState<ImageMode | null>(null);
   const pendingQuestionRef = useRef<string | null>(null);
   const sessionKeyRef = useRef<string | null>(null);
 
-  // 세션키 업데이트
   const updateSessionKey = (key: string) => {
     sessionKeyRef.current = key;
   };
 
   const onAudioSend = async (audioBlob: Blob) => {
-
     setIsWorking(true);
-    // 너무 짧은 음성
+
     if (audioBlob.size < 10000) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: "인식할 수 없습니다. 🎤" },
-        { role: "assistant", content: "음성이 너무 짧아요! 조금 더 이야기해주세요 😊" },
-      ]);
+      addMessage({
+        role: "assistant",
+        content: "🎤 음성이 너무 짧아요! 다시 말해주세요 😅",
+      });
       setIsWorking(false);
       return;
     }
+
     try {
       const userTempId = Date.now();
-      setMessages((prev) => [...prev, { role: "user", content: ".", tempId: userTempId }]);
+      addMessage({ role: "user", content: ".", tempId: userTempId });
       startDots(userTempId);
 
-      // 1. Whisper API 호출
+      // Whisper 변환
       const userText = await useWhisper(audioBlob);
       stopDots();
-      setMessages((prev) =>
-        prev.map((m) => (m.tempId === userTempId ? { ...m, content: userText } : m))
-      );
+      updateTempMessage(userTempId, { content: userText });
 
-      // 2. assistant 임시 메세지
+      // Assistant 임시 버블
       const assistantTempId = Date.now() + 1;
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: ".", tempId: assistantTempId },
-      ]);
+      addMessage({ role: "assistant", content: ".", tempId: assistantTempId });
       startDots(assistantTempId);
 
-      // 3. 멀티턴 대화 모드
-
+      // Dialogue API
       const adRes = await generateDialogueRequest(userText, isLogin);
       stopDots();
-      if (sessionKeyRef.current !== adRes.session_key) {
-        updateSessionKey(adRes.session_key);
-      }
+
+      if (sessionKeyRef.current !== adRes.session_key) updateSessionKey(adRes.session_key);
+
+      // 이미지 요청 단계
       if (!adRes.is_complete) {
-        // 3-1. 광고 생성  - 이미지 요청
         if (adRes.type === "ad" && !uploadedImageFile) {
           pendingQuestionRef.current = adRes.next_question;
           setNeedImage(true);
-
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.tempId === assistantTempId ? { ...m, content: IMAGE_GUIDE_MESSAGE } : m
-            )
-          );
-          return;
-        } else {
-          // 이미 이미지 업로드가 되어 있다면 next_question 바로 출력
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.tempId === assistantTempId ? { ...m, content: adRes.next_question } : m
-            )
-          );
+          updateTempMessage(assistantTempId, {
+            content: IMAGE_GUIDE_MESSAGE,
+          });
           return;
         }
+
+        updateTempMessage(assistantTempId, {
+          content: adRes.next_question,
+        });
+        return;
       }
 
-      // 4. 대화 죵로 멘트 처리
-      const formatted = adRes.final_content
+      // 최종 문구 처리
+      const content = adRes.final_content
         ? formatChatResponse(adRes.final_content)
         : adRes.last_ment ?? "";
-      setMessages((prev) =>
-        prev.map((m) => (m.tempId === assistantTempId ? { ...m, content: formatted } : m))
-      );
+      updateTempMessage(assistantTempId, { content });
 
-      // 5. 광고 - 이미지 생성
-      const imagePrompt =
-        adRes.final_content?.image_prompt ?? adRes.final_content?.img_prompt ?? null;
+      // Diffusion 이미지 생성 단계
+      const imagePrompt = adRes.final_content?.image_prompt;
+      if (imagePrompt && uploadedImageFile) {
+        if (!imageMode) return;
 
-      if (imagePrompt) {
         const imgTempId = Date.now() + 2;
-        // 이미지 생성 중 메시지 추가
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "🖼️ 이미지 생성 중입니다...", tempId: imgTempId },
-        ]);
+        addMessage({
+          role: "assistant",
+          content: "🖼️ 이미지 생성 중...",
+          tempId: imgTempId,
+        });
 
-        if (!uploadedImageFile) return;
-        const imgSrc = await generateDiffusionRequest(imagePrompt, uploadedImageFile);
-
-        // 이미지 채우기
-        setMessages((prev) =>
-          prev.map((m) => (m.tempId === imgTempId ? { ...m, content: "", img: imgSrc } : m))
+        const img = await generateSyntheSizeDiffusionRequest(
+          imagePrompt,
+          uploadedImageFile,
+          imageMode
         );
-      }
-      if (adRes.is_complete) setUploadedImageFile(null);
-    } catch (err: any) {
-      const content = `❌ 오류 발생가 발생하였습니다. 다시 시도 부탁드립니다.`;
-      setMessages((prev) => {
-        if (prev.length === 0) {
-          return [{ role: "assistant", content }];
+        let file: File;
+
+        if (img instanceof File) {
+          file = img; 
+        } else {
+          file = new File([img], "result.png", {
+            type: img.type || "image/png",
+            lastModified: Date.now(),
+          });
         }
-        const lastIndex = prev.length - 1;
-        return prev.map((m, idx) => (idx === lastIndex ? { ...m, content } : m));
+        const base64Img = await fileToBase64(file);
+
+        updateTempMessage(imgTempId, { content: "", img: base64Img });
+      }
+
+      if (adRes.is_complete) setUploadedImageFile(null);
+    } catch (err) {
+      addMessage({
+        role: "assistant",
+        content: "❌ 오류가 발생했습니다. 다시 시도해주세요!",
       });
       stopDots();
     } finally {
@@ -135,26 +135,50 @@ export function useVoiceChat() {
     }
   };
 
-  // 6. 이미지 업로드 처리
-  const onImageUpload = async (file: File) => {
-    const imgUrl = URL.createObjectURL(file);
-    setUploadedImageFile(file);
-    setNeedImage(false);
-    // setAdImageUploaded(true);
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
-    // 이미지 전송
+  const onImageUpload = async (file: File) => {
     const key = sessionKeyRef.current;
     if (!key) return;
+
+    const base64Img = await fileToBase64(file);
+
+    setUploadedImageFile(file);
+    setNeedImage(false);
+
     await uploadImage(key, file);
 
-    const cleaned = pendingQuestionRef.current!.trim();
-    setMessages((prev) => [...prev, { role: "user", content: "", img: imgUrl }]);
-    if (pendingQuestionRef.current!) {
-      setMessages((prev) => [...prev, { role: "assistant", content: cleaned }]);
-      pendingQuestionRef.current = null;
-    }
-    return;
+    addMessage({ role: "user", content: "", img: base64Img });
+
+    addMessage({
+      role: "assistant",
+      content: "어떤 방식으로 이미지를 합성할까요?",
+      modeSelect: true,
+    });
   };
 
-  return { messages, needImage, isWorking, onAudioSend, onImageUpload };
+  const onSelectMode = (mode: ImageMode) => {
+    setImageMode(mode);
+
+    addMessage({
+      role: "user",
+      content: `👉 ${mode} 모드 선택!`,
+    });
+
+    if (pendingQuestionRef.current) {
+      addMessage({
+        role: "assistant",
+        content: pendingQuestionRef.current,
+      });
+      pendingQuestionRef.current = null;
+    }
+  };
+
+  return { messages, needImage, isWorking, onAudioSend, onImageUpload, onSelectMode };
 }

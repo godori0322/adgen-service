@@ -5,7 +5,7 @@ import VoiceRecorder from "../../components/voice/VoiceRecorder";
 import { useVoiceChat } from "../../hooks/useVoiceChat";
 
 export default function VoiceHomePage() {
-const { messages, needImage, isWorking, onAudioSend, onImageUpload } = useVoiceChat();
+  const { messages, needImage, isWorking, onAudioSend, onImageUpload, onSelectMode } = useVoiceChat();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -16,7 +16,7 @@ const { messages, needImage, isWorking, onAudioSend, onImageUpload } = useVoiceC
     <div className="relative pb-32">
       <PageTitle variant="section">🎙️ 음성 기반 마케팅 생성</PageTitle>
       {/* 채팅 bubble 영역 */}
-      <ChatBubbleList messages={messages} />
+      <ChatBubbleList messages={messages} onSelectMode={onSelectMode} />
       <div ref={chatEndRef} />
       {/* 🔥 이미지 업로드 UI */}
       {needImage && (

@@ -1,19 +1,25 @@
+import { Route, Routes } from "react-router-dom";
+import AuthLayout from "./components/layout/AuthLayout";
+import MainLayout from "./components/layout/MainLayout";
 import LoginPage from "./pages/auth/Login";
 import SignupPage from "./pages/auth/Signup";
 import VoiceHomePage from "./pages/home/VoiceHome";
 import MyPage from "./pages/mypage/MyPage";
 import PrivateRoute from "./router/PrivateRoute";
-import AuthLayout from "./components/layout/AuthLayout";
-import MainLayout from "./components/layout/MainLayout";
-import { Route, Routes } from "react-router-dom";
+import InstallPwaButton from "./components/common/InstallPwaButton";
+import FindAccountPage from "./pages/auth/FindAccount";
+import ResetPasswordPage from "./pages/auth/ResetPassword";
 
 function App() {
   return (
+    <>
       <Routes>
         {/* 로그인/회원가입 */}
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/find" element={<FindAccountPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Route>
         {/* <Route path="/signup" element={<SignupPage />} /> */}
 
@@ -44,6 +50,8 @@ function App() {
 
         <Route path="*" element={<div>404 NOT FOUND</div>} />
       </Routes>
+      <InstallPwaButton />
+    </>
   );
 }
 
