@@ -1,7 +1,9 @@
+import ReactMarkdown from "react-markdown";
 import type { ChatMessage } from "../../hooks/useVoiceChat";
 import ShareImageButton from "../common/ShareImageButton";
 import type { ImageMode } from "./ImageModeSelectorBubble";
 import ImageModeSelectorBubble from "./ImageModeSelectorBubble";
+import remarkGfm from "remark-gfm";
 
 export default function ChatBubbleList({
   messages,
@@ -29,7 +31,12 @@ export default function ChatBubbleList({
             }`}
         >
           {msg.content && (
-            <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre>
+            <>
+              {/* <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre> */}
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {(msg.content || "").replace(/\\n/g, "\n")}
+              </ReactMarkdown>
+            </>
           )}
 
           {msg.img && (
