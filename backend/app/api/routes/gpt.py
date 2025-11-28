@@ -10,7 +10,7 @@ import base64
 # 기존
 from backend.app.services.gpt_service import generate_marketing_idea
 # 추가
-from backend.app.services.gpt_service import generate_conversation_response, CONVERSATION_MEMORIES
+from backend.app.services.gpt_service import generate_conversation_response, CONVERSATION_MEMORIES, USER_CONTEXTS
 from backend.app.core.schemas import GPTRequest, GPTResponse, DialogueGPTResponse_AD, DialogueGPTResponse_Profile, FinalContentSchema
 from backend.app.core.database import get_db
 from backend.app.services import auth_service, memory_service
@@ -76,7 +76,7 @@ async def handle_marketing_dialog(
         # 3. 사용자 컨텍스트 구성 (첫 요청에만 DB 쿼리)
         user_context = None
         if current_user and not session_exists:
-            # 첫 대화: 프로필 + 장기 메모리 조회
+            # 로그인 사용자 첫 대화: 프로필 + 장기 메모리 조회
             menu_items_str = None
             if current_user.menu_items:
                 try:
@@ -95,11 +95,19 @@ async def handle_marketing_dialog(
                 "business_hours": current_user.business_hours,
                 "memory": long_term_memory  # 장기 메모리 추가
             }
-            print(f"📊 첫 대화: 사용자 컨텍스트 조회 완료 (user_id={current_user.id})")
+            print(f"📊 로그인 사용자 첫 대화: 컨텍스트 조회 완료 (user_id={current_user.id})")
+        elif is_guest:
+            # 비로그인 사용자: USER_CONTEXTS에서 user_context 확인 (정보 수집 완료 여부)
+            user_context = USER_CONTEXTS.get(session_key)
+            if user_context:
+                print(f"🔄 비로그인 사용자 정보 재사용 (USER_CONTEXTS): {session_key}")
+            else:
+                if session_exists:
+                    print(f"⚡ 비로그인 세션 재사용 (정보 없음): {session_key}")
+                else:
+                    print(f"🆕 비로그인 사용자 첫 대화: {session_key}")
         elif session_exists and current_user:
-            print(f"⚡ 세션 재사용: DB 쿼리 스킵 (user_id={current_user.id})")
-        elif session_exists and is_guest:
-            print(f"⚡ 게스트 세션 재사용: {session_key}")
+            print(f"⚡ 로그인 세션 재사용: DB 쿼리 스킵 (user_id={current_user.id})")
         
         # 4. 대화 진행 (세션 재사용 시 캐싱된 컨텍스트 사용)
         response = await generate_conversation_response(
@@ -144,6 +152,7 @@ async def handle_marketing_dialog(
         raise HTTPException(status_code=500, detail=f"GPT 응답 서비스 오류: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"서버 오류: {e}")
+
 
 
 @router.post("/dialogue/upload-image")
