@@ -25,6 +25,7 @@ class ConversationIntent(str, Enum):
     """대화 의도 분류"""
     PROFILE_BUILDING = "profile_building"  # 첫 대화: 마케팅 전략 정보 수집 (로그인)
     GUEST_PROFILE = "guest_profile"  # 첫 대화: 축약 프로필 수집 (비로그인)
+    GUEST_AD_GENERATION = "guest_ad_generation"  # 비로그인 광고 생성 (정보 수집 완료 후)
     INFO_UPDATE = "info_update"  # 정보 업데이트
     AD_GENERATION = "ad_generation"  # 광고 생성
     ANALYSIS = "analysis"  # 분석/조언
@@ -55,7 +56,7 @@ def classify_user_intent(user_input: str, has_complete_profile: bool) -> Convers
         return ConversationIntent.AD_GENERATION
     
     # 정보 업데이트 관련 키워드
-    update_keywords = ['요즘', '요새', '최근', '지금', '바뀌', '변경', '늘었', '줄었', '많아', '적어', '달라', '다르']
+    update_keywords = ['요즘', '요새', '최근', '지금', '바뀌', '변경', '늘었', '줄었', '많아', '적어', '달라', '다르', '추가', '새로']
     if any(keyword in user_input_lower for keyword in update_keywords):
         return ConversationIntent.INFO_UPDATE
     
@@ -74,6 +75,9 @@ parser_profile = PydanticOutputParser(pydantic_object=DialogueGPTResponse_Profil
 
 # 사용자별 대화 세션 저장 (user_id -> {chain, last_access})
 CONVERSATION_MEMORIES: Dict[str, Dict] = {}
+
+# 사용자 컨텍스트 영구 저장 (세션 종료 후에도 유지)
+USER_CONTEXTS: Dict[str, Dict] = {}
 
 # ================== 프롬프트 템플릿들 ==================
 
@@ -129,11 +133,11 @@ GUEST_PROFILE_TEMPLATE = """
 당신은 친근한 마케팅 어시스턴트입니다.
 
 === 대화 목표 ===
-비로그인 사용자를 위한 빠른 광고 생성 체험을 제공합니다.
-다음 3가지 정보를 수집한 후 즉시 광고를 생성하세요:
+비로그인 사용자를 위한 빠른 정보 수집을 진행합니다.
+다음 3가지 정보를 수집하세요:
 
 1. **업종과 위치** (예: 서울 강남 카페, 부산 해운대 음식점)
-2. **사용자가 입력한 제품 사진의 설명** (예: 아메리카노, 라떼, 디저트)
+2. **주요 메뉴들** (예: 아메리카노, 라떼, 디저트)
 3. **타겟 고객** (예: 20대 직장인, 대학생, 30대 여성)
 
 === 진행 단계 ===
@@ -143,7 +147,7 @@ GUEST_PROFILE_TEMPLATE = """
 - next_question에 다음 질문 작성
 
 **3번째 질문 응답 받은 후**:
-- 수집된 정보를 바탕으로 **즉시 광고 생성**
+- 정보 수집 완료
 - is_complete: true
 - final_content에 광고 생성:
   * idea: 마케팅 아이디어 (구체적이고 실행 가능한 아이디어)
@@ -162,10 +166,72 @@ GUEST_PROFILE_TEMPLATE = """
 
 
 === 중요 규칙 ===
-- 3개 정보 수집 완료 시 **반드시 광고를 생성**하세요
-- 사용자 확인 없이 바로 생성 (빠른 체험 제공)
-- image_prompt는 영어로 상세하게 작성 (분위기, 색감, 구성 포함)
+- 3개 정보 수집 완료 시 is_complete: true로 설정
+- 광고는 생성하지 않습니다 (다음 대화에서 생성)
 - 간결하고 빠르게 진행
+- 친근한 톤 유지
+- 같은 질문은 절대 3번 이상 반복하지 마세요
+
+=== 현재 대화 ===
+{history}
+
+사용자: {input}
+
+다음 JSON 형식으로 응답:
+{format_instructions}
+"""
+
+# 2-2️⃣ 비로그인 사용자 광고 생성 프롬프트 (정보 수집 완료 후)
+GUEST_AD_GENERATION_TEMPLATE = """
+당신은 소상공인 전담 마케팅 전문가입니다.
+
+=== 사업자 정보 (비로그인 사용자가 제공한 정보) ===
+업종: {business_type}
+위치: {location}
+주력 상품: {menu_items}
+타겟 고객: {existing_strategy}
+
+=== 대화 목표 ===
+사용자가 원하는 광고를 생성하기 위해 **전략 협의 프로세스**를 따르세요:
+
+**📋 단계 1: 광고 전략 제안**
+사용자가 광고를 요청하면, 즉시 생성하지 말고 먼저 구체적인 전략을 제안하세요:
+
+1. **메인 메시지**: 핵심 문구 (예: "따뜻한 크리스마스, 건강한 빵과 함께")
+2. **타겟 고객**: 누구를 대상으로? (위 타겟 고객 정보 활용)
+3. **비주얼 컨셉**: 어떤 느낌? (예: 아늑한, 트렌디한, 고급스러운)
+4. **이미지 스타일**: 구체적인 비주얼 방향
+5. **주요 요소**: 포함할 내용 (제품, 이벤트, 할인 등)
+
+전략 제안 후 반드시:
+- "이 방향으로 진행할까요?"
+- "수정하고 싶은 부분이 있으면 말씀해주세요!"
+- is_complete: false로 설정
+
+**🔄 단계 2: 피드백 반영**
+사용자가 수정을 요청하면:
+- 피드백을 반영한 **수정된 전략**을 다시 제시
+- "이렇게 수정했는데, 괜찮으신가요?"
+- 여전히 is_complete: false
+
+**✅ 단계 3: 최종 생성**
+사용자가 **명확하게 동의**할 때만 최종 광고를 생성하세요.
+
+**동의 표현 예시:**
+- "좋아요", "괜찮아요", "오케이", "그렇게 해주세요"
+- "만들어주세요", "생성해주세요", "진행해주세요"
+- "네", "응", "예", "그래"
+
+동의 확인 후:
+- is_complete: true
+- final_content에 최종 광고 생성 (idea, caption, hashtags, image_prompt)
+
+=== 중요 규칙 ===
+1. **절대 바로 생성하지 마세요**: 사용자 동의 없이 is_complete=true 금지
+2. **전략만 제안**: 동의 전까지는 항상 next_question에 전략 제안
+3. **명확한 동의 대기**: 애매한 반응에는 다시 확인
+4. **무한 수정 가능**: 사용자가 만족할 때까지 전략 조정
+5. **수집된 정보 활용**: 위 사업자 정보를 적극 반영
 
 === 현재 대화 ===
 {history}
@@ -333,52 +399,6 @@ def _safe_json_from_text(text: str) -> dict:
        
 
 # ================== Multi-turn langchain 대화 관리 함수 ==================
-def _get_or_create_chain(
-    user_id: Optional[int], 
-    user_context: dict = None,
-    first_input: str = None
-) -> tuple:
-    """
-    사용자별로 대화 체인 유지 + 첫 문장 의도 분류
-    
-    Args:
-        user_id: 사용자 ID
-        user_context: 사용자 컨텍스트 (첫 요청에만 제공)
-        first_input: 첫 문장 (의도 분류용, 새 세션에만 제공)
-        
-    Returns:
-        (chain, context) tuple
-    """
-    # 비로그인 사용자는 매번 새 체인
-    if user_id is None:
-        chain = _create_new_chain(user_context, first_input)
-        return chain, user_context
-    
-    # 로그인 사용자는 기존 체인 재사용
-    session_key = f"user-{user_id}"
-    
-    if session_key not in CONVERSATION_MEMORIES:
-        # 첫 대화: 새 체인 생성 (의도 분류 포함)
-        has_complete_profile = _check_profile_completeness(user_context)
-        intent = classify_user_intent(first_input, has_complete_profile) if first_input else (
-            ConversationIntent.PROFILE_BUILDING if not has_complete_profile else ConversationIntent.AD_GENERATION
-        )
-        chain = _create_new_chain(user_context, first_input)
-        CONVERSATION_MEMORIES[session_key] = {
-            "chain": chain,
-            "user_context": user_context,
-            "intent": intent,
-            "last_access": datetime.now()
-        }
-        print(f"✅ 새 대화 세션 생성: {session_key} (의도: {intent.value})")
-        return chain, user_context
-    else:
-        # 기존 대화: 저장된 체인 재사용
-        session = CONVERSATION_MEMORIES[session_key]
-        session["last_access"] = datetime.now()
-        print(f"♻️  기존 대화 세션 재사용: {session_key}")
-        return session["chain"], session["user_context"]
-
 
 def _check_profile_completeness(context: dict) -> bool:
     """마케팅 전략 정보가 충분히 수집되었는지 확인"""
@@ -427,76 +447,6 @@ def _format_strategy_info(memory) -> str:
     return "\n".join(lines) if lines else "아직 수집된 정보 없음"
 
 
-def _create_new_chain(user_context: dict = None, first_input: str = None) -> ConversationChain:
-    """새 LangChain ConversationChain 생성 (의도 기반 프롬프트 선택)"""
-    
-    # 프로필 완성 여부 확인
-    has_complete_profile = _check_profile_completeness(user_context)
-    
-    # 의도 분류 (새 세션이고 first_input이 있을 때만)
-    if first_input:
-        intent = classify_user_intent(first_input, has_complete_profile)
-        print(f"🎯 감지된 의도: {intent.value}")
-    else:
-        # first_input이 없으면 기본값
-        intent = ConversationIntent.PROFILE_BUILDING if not has_complete_profile else ConversationIntent.AD_GENERATION
-    
-    # 의도에 맞는 프롬프트 선택
-    if intent == ConversationIntent.PROFILE_BUILDING:
-        template = PROFILE_BUILDING_TEMPLATE
-    elif intent == ConversationIntent.INFO_UPDATE:
-        template = INFO_UPDATE_TEMPLATE
-    elif intent == ConversationIntent.AD_GENERATION:
-        template = AD_GENERATION_TEMPLATE
-    elif intent == ConversationIntent.ANALYSIS:
-        template = ANALYSIS_TEMPLATE
-    else:
-        template = PROFILE_BUILDING_TEMPLATE
-    
-    # 마케팅 전략 정보 포맷팅
-    strategy_text = _format_strategy_info(user_context.get("memory") if user_context else None)
-    
-    # 의도에 맞는 parser 선택
-    selected_parser = parser_ad if intent == ConversationIntent.AD_GENERATION else parser_profile
-    
-    # LangChain LLM 설정
-    llm = ChatOpenAI(
-        model_name="gpt-4o", 
-        temperature=0.7,
-        openai_api_key=os.getenv("OPENAI_API_KEY")
-    )
-
-    # 메모리 설정
-    memory = ConversationBufferWindowMemory(
-        k=MAX_MEMORY_TURNS,
-        memory_key="history"
-    )
-    
-    # 프롬프트 구성
-    prompt = PromptTemplate(
-        template=template,
-        input_variables=["input"],
-        partial_variables={
-            "format_instructions": selected_parser.get_format_instructions(),
-            "business_type": user_context.get("business_type", "미확인") if user_context else "미확인",
-            "location": user_context.get("location", "미확인") if user_context else "미확인",
-            "menu_items": user_context.get("menu_items", "미확인") if user_context else "미확인",
-            "business_hours": user_context.get("business_hours", "미확인") if user_context else "미확인",
-            "existing_strategy": strategy_text
-        },
-    )
-
-    # Conversation Chain 생성
-    chain = ConversationChain(
-        llm=llm,
-        prompt=prompt,
-        memory=memory,
-        verbose=False 
-    )
-    
-    return chain
-
-
 async def generate_conversation_response(
     user_input: str,
     session_key: str,
@@ -519,16 +469,26 @@ async def generate_conversation_response(
         # 세션 재사용 또는 새 세션 생성
         if session_key in CONVERSATION_MEMORIES:
             print(f"♻️  기존 대화 세션 재사용: {session_key}")
-            memory_obj = CONVERSATION_MEMORIES[session_key]["memory"]
-            chain = CONVERSATION_MEMORIES[session_key]["chain"]
-            intent = CONVERSATION_MEMORIES[session_key]["intent"]
-            parser = CONVERSATION_MEMORIES[session_key]["parser"]
+            session = CONVERSATION_MEMORIES[session_key]
+            memory_obj = session["memory"]
+            chain = session["chain"]
+            intent = session["intent"]
+            parser = session["parser"]
+                
         else:
             print(f"✅ 새 대화 세션 생성: {session_key}")
             
             # 인텐트 결정
             if is_guest:
-                intent = ConversationIntent.GUEST_PROFILE
+                # 비로그인 사용자: user_context 존재 여부로 판단
+                if user_context and user_context.get("business_type") and user_context.get("business_type") != "미확인":
+                    # 정보 수집 완료 → 광고 생성 모드
+                    intent = ConversationIntent.GUEST_AD_GENERATION
+                    print(f"🎯 비로그인 사용자 정보 있음 → 광고 생성 모드")
+                else:
+                    # 정보 수집 필요 → 프로필 수집 모드
+                    intent = ConversationIntent.GUEST_PROFILE
+                    print(f"🆕 비로그인 사용자 정보 없음 → 프로필 수집 모드")
             elif user_context:
                 # 로그인 사용자: 마케팅 전략 정보 완성 여부 체크
                 has_complete_profile = _check_profile_completeness(user_context)
@@ -547,7 +507,10 @@ async def generate_conversation_response(
             # 프롬프트 및 파서 선택
             if intent == ConversationIntent.GUEST_PROFILE:
                 template = GUEST_PROFILE_TEMPLATE
-                parser = parser_ad  # 비로그인은 광고 생성으로
+                parser = parser_profile  # 비로그인 첫 대화는 정보 수집 스키마
+            elif intent == ConversationIntent.GUEST_AD_GENERATION:
+                template = GUEST_AD_GENERATION_TEMPLATE
+                parser = parser_ad
             elif intent == ConversationIntent.PROFILE_BUILDING:
                 template = PROFILE_BUILDING_TEMPLATE
                 parser = parser_profile
@@ -566,7 +529,7 @@ async def generate_conversation_response(
             
             # LangChain 설정
             llm = ChatOpenAI(
-                model_name="gpt-4o",
+                model="gpt-4o",
                 temperature=0.7,
                 openai_api_key=os.getenv("OPENAI_API_KEY")
             )
@@ -603,7 +566,7 @@ async def generate_conversation_response(
                 "chain": chain,
                 "intent": intent,
                 "parser": parser,
-                "user_context": user_context
+                "user_context": user_context  # 로그인/비로그인 모두 동일하게 관리
             }
         
         # langchain 실행(메모리 자동 관리 & 프롬프트 주입) - asyncio.to_thread 사용
@@ -618,8 +581,9 @@ async def generate_conversation_response(
         # Pydantic 모델로 변환 (이미 parser가 올바른 타입으로 파싱함)
         data = _safe_json_from_text(raw_response)
         
-        if intent in [ConversationIntent.AD_GENERATION, ConversationIntent.GUEST_PROFILE]:
-            # 광고 생성 모드 (로그인 AD_GENERATION + 비로그인 GUEST_PROFILE)
+        if intent in [ConversationIntent.AD_GENERATION, ConversationIntent.GUEST_AD_GENERATION]:
+            # 광고 생성 모드 (로그인 AD_GENERATION + 비로그인 GUEST_AD_GENERATION)
+            data["type"] = "ad"  # type 필드 강제 주입
             response = DialogueGPTResponse_AD(**data)
             
             # ----------------------------------------
@@ -651,7 +615,8 @@ async def generate_conversation_response(
                 response = response.model_copy(update={"final_content": updated_fianl_content})
                            
         else:
-            # PROFILE_BUILDING, INFO_UPDATE, ANALYSIS
+            # PROFILE_BUILDING, INFO_UPDATE, ANALYSIS, GUEST_PROFILE
+            data["type"] = "profile"  # type 필드 강제 주입
             # GPT가 last_ment를 안 보내면 강제 주입
             if data.get("is_complete") and not data.get("last_ment"):
                 data["last_ment"] = "위의 대화를 반영하겠습니다"
@@ -659,14 +624,40 @@ async def generate_conversation_response(
         
         # 대화 완료 시: 대화 기록 추출 + Vision 통합 (세션 삭제는 gpt.py에서 처리)
         if response.is_complete and session_key in CONVERSATION_MEMORIES:
-            # 디버깅: 세션 상태 확인
-            print(f"🔍 [DEBUG] 세션 키: {session_key}")
-            print(f"🔍 [DEBUG] product_image 존재 여부: {'product_image' in CONVERSATION_MEMORIES[session_key]}")
-            if "product_image" in CONVERSATION_MEMORIES[session_key]:
-                img_data = CONVERSATION_MEMORIES[session_key]["product_image"]
-                print(f"🔍 [DEBUG] product_image 길이: {len(img_data) if img_data else 0} bytes")
-            print(f"🔍 [DEBUG] intent: {intent}")
-            print(f"🔍 [DEBUG] response.final_content 존재: {response.final_content is not None}")
+            # 비로그인 사용자 첫 대화 완료: 정보 저장
+            if is_guest and intent == ConversationIntent.GUEST_PROFILE:
+                print("✅ 비로그인 사용자 정보 수집 완료")
+                
+                # 대화 히스토리에서 정보 추출
+                messages = memory_obj.chat_memory.messages
+                
+                # 간단한 정보 추출: 사용자가 말한 내용에서 추출
+                collected_info = {
+                    "business_type": "미확인",
+                    "location": "미확인",
+                    "menu_items": "미확인",
+                    "target_audience": "미확인"
+                }
+                
+                # 사용자 응답만 추출하여 저장 (간단한 방식)
+                user_responses = [msg.content for msg in messages if msg.type == "human"]
+                if len(user_responses) >= 1:
+                    collected_info["business_type"] = user_responses[0] if len(user_responses) > 0 else "미확인"
+                if len(user_responses) >= 2:
+                    collected_info["menu_items"] = user_responses[1] if len(user_responses) > 1 else "미확인"
+                if len(user_responses) >= 3:
+                    collected_info["target_audience"] = user_responses[2] if len(user_responses) > 2 else "미확인"
+                
+                # location은 business_type에서 추출 시도 (예: "서울 강남 카페" → location: "서울 강남")
+                if collected_info["business_type"] != "미확인":
+                    parts = collected_info["business_type"].split()
+                    if len(parts) >= 2:
+                        collected_info["location"] = " ".join(parts[:-1])  # 마지막 단어(업종) 제외
+                
+                # USER_CONTEXTS에 영구 저장 (세션 삭제되어도 유지)
+                USER_CONTEXTS[session_key] = collected_info
+                print(f"💾 수집된 정보 저장 (USER_CONTEXTS): {collected_info}")
+                print("➡️  다음 대화는 GUEST_AD_GENERATION 모드로 시작됩니다")
             
             # 대화 기록 추출
             messages = memory_obj.chat_memory.messages
@@ -682,7 +673,7 @@ async def generate_conversation_response(
             
             # Vision 통합: 광고 생성 완료 + 제품 이미지 존재 시
             if (
-                intent in [ConversationIntent.AD_GENERATION, ConversationIntent.GUEST_PROFILE]
+                intent in [ConversationIntent.AD_GENERATION, ConversationIntent.GUEST_AD_GENERATION]
                 and response.final_content
                 and "product_image" in CONVERSATION_MEMORIES[session_key]
                 and CONVERSATION_MEMORIES[session_key]["product_image"]
@@ -730,6 +721,7 @@ async def generate_conversation_response(
 
     except Exception as e:
         raise ValueError(f"LangChain 대화 응답 생성 실패: {e}")
+
 
 
       

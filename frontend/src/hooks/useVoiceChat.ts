@@ -111,7 +111,7 @@ export function useVoiceChat() {
         let file: File;
 
         if (img instanceof File) {
-          file = img; 
+          file = img;
         } else {
           file = new File([img], "result.png", {
             type: img.type || "image/png",
@@ -170,6 +170,11 @@ export function useVoiceChat() {
       role: "user",
       content: `👉 ${mode} 모드 선택!`,
     });
+
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.modeSelect && lastMsg.tempId) {
+      updateTempMessage(lastMsg.tempId, { modeSelect: false });
+    }
 
     if (pendingQuestionRef.current) {
       addMessage({

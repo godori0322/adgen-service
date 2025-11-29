@@ -5,23 +5,37 @@ export default function InstallPwaButton() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    // 이미 설치되어 있으면 버튼 숨기기
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true;
+
+    if (isStandalone) return;
+
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setIsVisible(true); // 버튼 표시
+      setIsVisible(true); // 버튼 보이기
     };
 
     window.addEventListener("beforeinstallprompt", handler);
-
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+    };
   }, []);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
 
-    deferredPrompt.prompt();
+    await deferredPrompt.prompt();
+    const choiceResult = await deferredPrompt.userChoice;
+
+    if (choiceResult.outcome === "accepted") {
+      console.log("PWA installed");
+    }
+
     setDeferredPrompt(null);
-    setIsVisible(false); // 버튼 숨김
+    setIsVisible(false); // 설치하면 숨기기
   };
 
   if (!isVisible) return null;

@@ -7,6 +7,35 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      manifest: {
+        name: "AdGen",
+        short_name: "AdGen",
+        start_url: "/",
+        id: "/",
+        display: "standalone",
+        background_color: "#ffffff",
+        theme_color: "#3B82F6",
+        icons: [
+          {
+            src: "/icons/icon-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-1024x1024.png",
+            sizes: "1024x1024",
+            type: "image/png",
+            purpose: "any maskable",
+          },
+        ],
+      },
       workbox: {
         navigateFallback: "/index.html",
       },

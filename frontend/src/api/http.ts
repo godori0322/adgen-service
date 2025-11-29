@@ -3,10 +3,10 @@
 const BASE_URL = import.meta.env.VITE_FAST_API_URL + "/api";
 
 const authHeader = (): Record<string, string> => {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("accessToken");
+  console.log(token);
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
-
 
 export async function httpGet(url: string) {
   const res = await fetch(BASE_URL + url, {

@@ -3,6 +3,7 @@
 
 # .env 로드 (SAM_MODEL_PATH 사용)
 from dotenv import load_dotenv
+from networkx import betweenness_centrality_subset
 from transformers import CTRLPreTrainedModel
 load_dotenv()
 
@@ -21,11 +22,13 @@ class ProductSegmentation:
         sam_model_type: str = "vit_b",
         sam_max_size: int = 768,   # SAM 입력 최대 해상도(긴 변 기준, 필요 시 사용)
         points_per_side: int = 24, # 자동 마스크 생성 정밀도 (필요시 조절)
+        upscaler_scale: int = 2,
     ):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.sam_model_type = sam_model_type
         self.sam_max_size = sam_max_size
         self.points_per_side = points_per_side
+        self.upscale_factor = upscaler_scale
 
         # lazy loading용 플레이스홀더
         self.sam_model = None
@@ -99,18 +102,15 @@ class ProductSegmentation:
         if len(masks) == 0:
             raise ValueError("SAM이 마스크를 감지하지 못했습니다.")
 
-        # area 기준으로 가장 큰 객체 선택
-        masks = sorted(masks, key=lambda x: x["area"], reverse=True)
-        best = masks[0]
-        mask = best["segmentation"].astype(np.uint8)
-        mask = np.squeeze(mask)
+        # 종합 점수 기준으로 가장 제품일 확률이 높은 마스크 선정
+        best_mask = select_best_mask(img_rgb, masks)
 
         # inversion 체크 (중앙이 비어 있으면 반전)
-        if mask_needs_invert(mask):
-            mask = 1 - mask
+        if mask_needs_invert(best_mask):
+            best_mask = 1 - best_mask
 
         # 경계 부드럽게 (0~1 float)
-        refined_mask = refine_mask(mask)
+        refined_mask = refine_mask(best_mask)
 
         # halo 제거
         refined_mask = remove_halo(refined_mask)
@@ -231,3 +231,72 @@ def color_decontaminate(img_np, mask_float, strength=0.6):
 
     decont = img_np * mask_expanded[..., None] + blurred_img * (1 - mask_expanded[..., None]) * strength
     return decont.astype(np.uint8)
+
+# =============================================================
+# best mask 선택 유틸
+# =============================================================
+
+# =============================================================
+# 1. 마스크의 중심도(centeredness)
+# =============================================================
+def mask_center_score(mask):
+    h, w = mask.shape
+    ys, xs = np.where(mask > 0)
+    if len(xs) == 0:
+        return 0
+    
+    cx, cy = xs.mean(), ys.mean()
+    dx = abs(cx - w / 2) / (w / 2)
+    dy = abs(cy - h / 2) / (h / 2)
+    dist = (dx + dy) / 2
+    # 중앙에 가까울수록 점수가 높음
+    return 1 - dist
+
+# =============================================================
+# 2. 마스크 내부 평균 색상 분산(color variance)
+# =============================================================
+def color_variance_score(img, mask):
+    masked = img[mask > 0]
+    if len(masked) == 0:
+        return 0
+    var = np.var(masked)
+    return min(var / 5000, 1.0)
+
+# =============================================================
+# 3. 마스크 경계 복잡도(edge complexity)
+# =============================================================
+def edge_complex_score(mask):
+    edges = cv2.Canny((mask * 255).astype(np.uint8), 50, 150)
+    score = edges.sum() / 255
+    return min(score / 5, 1.0)
+
+# =============================================================
+# 4. 종합 점수 계산
+# =============================================================
+def select_best_mask(img_rgb, masks):
+    h, w, _ = img_rgb.shape
+    best_score = -1
+    best_mask = None
+
+    for m in masks:
+        mask = m["segmentation"].astype(np.uint8)
+        mask = np.squeeze(mask)
+
+        # 너무 작은 마스크는 무시
+        area = m["area"]
+        if area < (h * w * 0.02):
+            continue
+
+        center_score = mask_center_score(mask)
+        color_var_score = color_variance_score(img_rgb, mask)
+        edge_score = edge_complex_score(mask)
+        # 마스크 영역 점수도 반영(하지만 배경 마스크 방지를 위해 적은 비율로)
+        area_score = min(area / (h * w), 1.0)
+
+        total_score = (0.4 * center_score) + (0.35 * edge_score) + (0.15 * color_var_score) + (0.1 * area_score)
+
+        if total_score > best_score:
+            best_score = total_score
+            best_mask = mask
+
+    return best_mask
