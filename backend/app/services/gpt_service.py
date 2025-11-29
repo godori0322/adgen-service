@@ -149,7 +149,21 @@ GUEST_PROFILE_TEMPLATE = """
 **3번째 질문 응답 받은 후**:
 - 정보 수집 완료
 - is_complete: true
-- last_ment: "정보 수집이 완료되었습니다! 이제 원하시는 광고를 만들어드릴 수 있어요. 어떤 광고를 만들어드릴까요?"
+- final_content에 광고 생성:
+  * idea: 마케팅 아이디어 (구체적이고 실행 가능한 아이디어)
+  * caption: 홍보 문구 (SNS 게시물용 매력적인 문구)
+  * hashtags: 해시태그 리스트 (5~7개, 관련성 높은 태그)
+  * image_prompt: 이미지 생성용 상세 프롬프트 (영어로 작성, Stable Diffusion용)
+  * bgm_prompt: MusicGen에서 바로 사용할 수 있는 영어 한 문장.
+      - 반드시 포함할 요소:
+        - 장르(genre): lo-fi hip hop, jazz, ambient 등
+        - 분위기(mood): cozy, energetic, dreamy, calm 등
+        - 템포(tempo): BPM(예: 80-90 BPM) 또는 slow/medium/fast
+        - 악기(instruments): piano, guitar, strings, soft drums 등
+        - 사용 맥락(context): small cafe, hair salon, casual restaurant 등
+      - 예시:
+        "warm lo-fi hip hop instrumental, cozy and relaxed mood, 80-90 BPM, soft piano and light drums, background music for a small neighborhood cafe"
+
 
 === 중요 규칙 ===
 - 3개 정보 수집 완료 시 is_complete: true로 설정
@@ -300,7 +314,7 @@ AD_GENERATION_TEMPLATE = """
 
 동의 확인 후:
 - is_complete: true
-- final_content에 최종 광고 생성 (idea, caption, hashtags, image_prompt)
+- final_content에 최종 광고 생성 (idea, caption, hashtags, image_prompt, bgm_prompt)
 
 === 중요 규칙 ===
 1. **절대 바로 생성하지 마세요**: 사용자 동의 없이 is_complete=true 금지
@@ -308,6 +322,24 @@ AD_GENERATION_TEMPLATE = """
 3. **명확한 동의 대기**: 애매한 반응에는 다시 확인
 4. **무한 수정 가능**: 사용자가 만족할 때까지 전략 조정
 5. **기존 정보 활용**: 마케팅 전략 정보를 적극 반영
+
+=== 출력 형식 ===
+최종 광고를 생성할 때(final_content에 담을 때) 필드는 다음과 같이 구성:
+
+- idea: 마케팅 아이디어 (구체적이고 실행 가능한 아이디어)
+- caption: 홍보 문구 (SNS 게시물용 매력적인 문장)
+- hashtags: 해시태그 리스트 (5~7개, 관련성 높은 태그)
+- image_prompt: 이미지 생성용 상세 프롬프트 (영어로 작성, Stable Diffusion용)
+- bgm_prompt: MusicGen에서 바로 사용할 수 있는 영어 한 문장
+    - 반드시 포함할 요소:
+      - 장르(genre): lo-fi hip hop, jazz, ambient 등
+      - 분위기(mood): cozy, energetic, dreamy, calm 등
+      - 템포(tempo): BPM(예: 80-90 BPM) 또는 slow/medium/fast
+      - 악기(instruments): piano, guitar, strings, soft drums 등
+      - 사용 맥락(context): small cafe, hair salon, casual restaurant 등
+    - 예시:
+      "warm lo-fi hip hop instrumental, cozy and relaxed mood, 80-90 BPM, soft piano and light drums, background music for a small neighborhood cafe"
+
 
 === 현재 대화 ===
 {history}
@@ -553,6 +585,35 @@ async def generate_conversation_response(
             # 광고 생성 모드 (로그인 AD_GENERATION + 비로그인 GUEST_AD_GENERATION)
             data["type"] = "ad"  # type 필드 강제 주입
             response = DialogueGPTResponse_AD(**data)
+            
+            # ----------------------------------------
+            # bgm_prompt 최소 검증 + 보정
+            # ----------------------------------------
+            if response.final_content:
+                bgm_prompt = (response.final_content.bgm_prompt or "").strip()
+
+                # 1) 비어 있으면 기본값으로 교체
+                if not bgm_prompt:
+                    bgm_prompt = (
+                        "warm lo-fi hip hop instrumental, cozy and relaxed mood, "
+                        "80-90 BPM, soft piano and light drums, "
+                        "background music for a small neighborhood cafe"
+                    )
+                else:
+                    # 2) 너무 짧으면 (단어 5개 미만) 기본값으로 교체
+                    if len(bgm_prompt.split()) < 5:
+                        bgm_prompt = (
+                            "warm lo-fi hip hop instrumental, cozy and relaxed mood, "
+                            "80-90 BPM, soft piano and light drums, "
+                            "background music for a small neighborhood cafe"
+                        )
+
+                # 3) pydantic 객체 업데이트
+                updated_final_content = response.final_content.model_copy(
+                    update={"bgm_prompt": bgm_prompt}
+                )
+                response = response.model_copy(update={"final_content": updated_fianl_content})
+                           
         else:
             # PROFILE_BUILDING, INFO_UPDATE, ANALYSIS, GUEST_PROFILE
             data["type"] = "profile"  # type 필드 강제 주입
@@ -679,6 +740,10 @@ async def generate_marketing_idea(prompt_text: str, context=None) -> dict:
         "현재 날짜와 계절 및 시간을 고려하여 적절한 마케팅 콘텐츠를 생성해야 함. "
         "예: 11월이면 가을/겨울 이벤트, 5월이면 봄 이벤트를 제안. "
         "항상 JSON 오브젝트만 출력. 코드블록/설명/추가 문장 금지."
+        "bgm_prompt는 MusicGen 같은 음악 생성 모델에서 바로 사용할 수 있는 영어 문장으로 생성해야 함. "
+        "bgm_prompt에는 반드시 다음 요소가 모두 포함되어야 함: "
+        "장르(genre), 분위기(mood), 템포(tempo 또는 BPM), 주요 악기(instruments), "
+        "사용 맥락(context: 예를 들어 small cafe, hair salon, casual restaurant 등)."       
     )
 
     # 2) 사용자 프롬프트 구성 역할
@@ -695,7 +760,8 @@ async def generate_marketing_idea(prompt_text: str, context=None) -> dict:
      "idea": "짧은 이벤트 아이디어 문장",
       "caption": "홍보용 문구(짧고 감성적인 문장)",
       "hashtags": ["#예시", "#홍보", "#지역명"],
-      "image_prompt": "Stable Diffusion용 영어 프롬프트"
+      "image_prompt": "Stable Diffusion용 영어 프롬프트",
+      "bgm_prompt": "warm lo-fi hip hop instrumental, cozy and relaxed mood, 80-90 BPM, soft piano and light drums, background music for a small neighborhood cafe"
     }}
     """.strip()
 
@@ -727,6 +793,7 @@ async def generate_marketing_idea(prompt_text: str, context=None) -> dict:
         caption = data.get("caption", "").strip()
         hashtags = data.get("hashtags", [])
         image_prompt = data.get("image_prompt", "").strip()
+        bgm_prompt = data.get("bgm_prompt", "").strip() # 새로 추가 : bgm 프롬프트
 
         if not isinstance(hashtags, list):
             hashtags = []
@@ -735,12 +802,26 @@ async def generate_marketing_idea(prompt_text: str, context=None) -> dict:
             # image_prompt 누락 시 캡션/아이디어 기반 기본 프롬프트 생성 보정 역할
             fallback = "clean promotional poster, high quality, modern typography"
             image_prompt = f"{caption or idea}, {fallback}"
+        if not bgm_prompt:
+            bgm_prompt = (
+                "warm lo-fi hip hop instrumental, cozy and relaxed mood, "
+                "80-90 BPM, soft piano and light drums, "
+                "background music for a small neighborhood cafe"
+            )
+        else:
+            if len(bgm_prompt.split()) < 5:
+                bgm_prompt = (
+                    "warm lo-fi hip hop instrumental, cozy and relaxed mood, "
+                    "80-90 BPM, soft piano and light drums, "
+                    "background music for a small neighborhood cafe"          
+                )
 
         return {
             "idea": idea,
             "caption": caption,
             "hashtags": hashtags,
-            "image_prompt": image_prompt
+            "image_prompt": image_prompt,
+            "bgm_prompt": bgm_prompt,
         }
 
     except Exception as e:

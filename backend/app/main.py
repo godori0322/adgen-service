@@ -16,6 +16,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles 
 from backend.app.api.router import api_router
 from backend.app.core.database import engine, Base
 
@@ -23,6 +24,14 @@ from backend.app.core.database import engine, Base
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Voice2Marketing API Prototype")
+
+# media 디렉토리 정적 서빙
+app.mount(
+    "/media",
+    StaticFiles(directory="media"),
+    name="media",
+)
+
 
 app.add_middleware(
     CORSMiddleware,
