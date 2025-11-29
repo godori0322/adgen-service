@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { PageTitle } from "../../components/common/Title";
 import ChatBubbleList from "../../components/voice/ChatBubbleList";
 import VoiceRecorder from "../../components/voice/VoiceRecorder";
