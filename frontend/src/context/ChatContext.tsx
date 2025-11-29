@@ -5,13 +5,17 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   img?: string;
+  video?: string;
+  audio?: string;
   tempId?: number;
   modeSelect?: boolean;
+  bgmSelect?: boolean;
   parsed?: {
     idea: string;
     caption: string;
     hashtags?: string[];
   };
+  retryType?: "image" | "video" | "audio";
 }
 
 interface ChatContextValue {

@@ -7,5 +7,5 @@ export async function useWhisper(audioBlob: Blob) {
 
   // Whisper API 호출
   const res = await whisperTranscribeRequest(file);
-  return res.text || res.transcript || "(음성 인식 결과 없음)";
+  return res.text || res.transcript;
 }

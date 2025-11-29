@@ -128,85 +128,88 @@ export default function MyPage() {
     }
   };
   return (
-    <div className="relative pb-32">
-      <PageTitle variant="section">마이페이지</PageTitle>
-      <section className="bg-white shadow rounded-xl p-5 mt-6">
-        <SectionTitle>내 정보</SectionTitle>
-        {!draft ? (
-          <SkeletonLoader />
-        ) : (
-          <>
-            <div className="space-y-2">
-              <ProfileRow
-                label="아이디"
-                value={draft.userName ?? ""}
-                editMode={false}
-                onChange={(v) => handleChange("userName", v)}
-              />
-              {/* <ProfileRow
-            label="이름"
-            value={draft.name}
-            editMode={editMode} 
-            onChange={(v) => handleChange("name", v)}
-           /> */}
-              <ProfileRow
-                label="업종"
-                value={draft.businessType ?? ""}
-                editMode={editMode}
-                onChange={(v) => handleChange("businessType", v)}
-              />
-              <ProfileRow
-                label="주소"
-                value={draft.location ?? ""}
-                editMode={editMode}
-                onChange={(v) => handleChange("location", v)}
-              />
-              <HourRow
-                label="영업시간"
-                openTime={draft.openTime ?? ""}
-                closeTime={draft.closeTime ?? ""}
-                onChange={(key, value) => handleChange(key, value)}
-                editMode={editMode}
-              />
-              <MenuTagEditor
-                items={draft.menuItems ?? []}
-                editMode={editMode}
-                onAdd={addMenuItem}
-                onRemove={removeMenuItem}
-              />
-            </div>
-            {!editMode ? (
-              <button
-                className="mt-5 w-full py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600"
-                onClick={() => setEditMode(true)}
-              >
-                정보 수정
-              </button>
-            ) : (
-              <div className="flex gap-2 mt-5">
-                <button
-                  className="flex-1 py-2 bg-gray-300 text-gray-800 rounded-lg font-medium hover:bg-gray-400"
-                  onClick={handleCancel}
-                >
-                  취소
-                </button>
-                <button
-                  className="flex-1 py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600"
-                  onClick={handleSave}
-                >
-                  저장
-                </button>
+    <div className="flex justify-center w-full px-4 pb-32">
+      <div className="w-full max-w-[480px]">
+        <PageTitle variant="section">마이페이지</PageTitle>
+
+        <section className="bg-white shadow rounded-xl p-5 mt-6">
+          <SectionTitle>내 정보</SectionTitle>
+
+          {!draft ? (
+            <SkeletonLoader />
+          ) : (
+            <>
+              <div className="space-y-3">
+                <ProfileRow
+                  label="아이디"
+                  value={draft.userName ?? ""}
+                  editMode={false}
+                  onChange={(v) => handleChange("userName", v)}
+                />
+                <ProfileRow
+                  label="업종"
+                  value={draft.businessType ?? ""}
+                  editMode={editMode}
+                  onChange={(v) => handleChange("businessType", v)}
+                />
+                <ProfileRow
+                  label="주소"
+                  value={draft.location ?? ""}
+                  editMode={editMode}
+                  onChange={(v) => handleChange("location", v)}
+                />
+
+                <HourRow
+                  label="영업시간"
+                  openTime={draft.openTime ?? ""}
+                  closeTime={draft.closeTime ?? ""}
+                  onChange={(key, value) => handleChange(key, value)}
+                  editMode={editMode}
+                />
+
+                <MenuTagEditor
+                  items={draft.menuItems ?? []}
+                  editMode={editMode}
+                  onAdd={addMenuItem}
+                  onRemove={removeMenuItem}
+                />
               </div>
-            )}
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="w-full mt-6 text-sm text-red-500 hover:text-red-600"
-            >
-              회원탈퇴
-            </button>
-          </>
-        )}
-      </section>
+
+              {!editMode ? (
+                <button
+                  className="mt-6 w-full py-3 bg-blue-500 text-white rounded-lg font-medium active:bg-blue-600"
+                  onClick={() => setEditMode(true)}
+                >
+                  정보 수정
+                </button>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-3 mt-6 w-full">
+                  <button
+                    className="flex-1 py-3 bg-gray-200 text-gray-800 rounded-lg font-medium active:bg-gray-300"
+                    onClick={handleCancel}
+                  >
+                    취소
+                  </button>
+                  <button
+                    className="flex-1 py-3 bg-blue-500 text-white rounded-lg font-medium active:bg-blue-600"
+                    onClick={handleSave}
+                  >
+                    저장
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="w-full mt-8 text-sm text-red-500 hover:text-red-600"
+              >
+                회원탈퇴
+              </button>
+            </>
+          )}
+        </section>
+      </div>
+
       {showDeleteModal && (
         <ConfirmModal
           title="회원탈퇴"
@@ -217,6 +220,7 @@ export default function MyPage() {
           onCancel={() => setShowDeleteModal(false)}
         />
       )}
+
       {showAlert && (
         <AlertModal
           title={alertContent.title}
