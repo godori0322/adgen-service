@@ -612,7 +612,7 @@ async def generate_conversation_response(
                 updated_final_content = response.final_content.model_copy(
                     update={"bgm_prompt": bgm_prompt}
                 )
-                response = response.model_copy(update={"final_content": updated_fianl_content})
+                response = response.model_copy(update={"final_content": updated_final_content})
                            
         else:
             # PROFILE_BUILDING, INFO_UPDATE, ANALYSIS, GUEST_PROFILE
