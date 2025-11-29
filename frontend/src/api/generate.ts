@@ -1,54 +1,66 @@
 import type { ImageMode } from "../components/voice/ImageModeSelectorBubble";
 import { getGuestSessionId } from "../utils/guestSession";
-import { httpPost, httpPostForm, httpPostImg } from "./http";
+import { httpPostJson, httpPostJsonBlob, httpPostForm, httpPostFormBlob } from "./http";
 
+// Whisper 음성 → 텍스트
 export async function whisperTranscribeRequest(file: File) {
   const form = new FormData();
   form.append("file", file);
-  return await httpPostForm("/whisper/transcribe", form);
+  return httpPostForm("/whisper/transcribe", form);
 }
 
+// GPT 마케팅 문구
 export async function generateMarketingRequest(text: string, context: string | null = null) {
-  const body = { text, context };
-  return await httpPost("/gpt/generate", body);
+  return httpPostJson("/gpt/generate", { text, context });
 }
 
-export async function generateRequest(text: string, context: string | null = null) {
-  const body = { text, context };
-  const adRes = await httpPost("/ads/generate", body);
-  return adRes;
-}
-
+// AI 광고 대화 진행
 export async function generateDialogueRequest(userInput: string, isLogin: boolean) {
-  const body:any = { user_input: userInput };
-  if(!isLogin) {
-    body.guest_session_id = getGuestSessionId();
-  }
-  return await httpPost("/gpt/dialogue", body);
+  const body: any = { user_input: userInput };
+  if (!isLogin) body.guest_session_id = getGuestSessionId();
+
+  return httpPostJson("/gpt/dialogue", body);
 }
 
+// Diffusion - 단일 이미지 생성
 export async function generateDiffusionRequest(prompt: string, img: File) {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("product_image", img);
-  const result = await httpPostImg("/diffusion/generate", form);
-  const imgSrc = URL.createObjectURL(result);
-  return imgSrc;
+
+  const blob = await httpPostFormBlob("/diffusion/generate", form);
+  return URL.createObjectURL(blob);
 }
 
-export async function generateSyntheSizeDiffusionRequest(prompt: string, img: File, imageMode: ImageMode) {
+// Diffusion - 자동 합성 + BGM 옵션
+export async function generateSyntheSizeDiffusionRequest(
+  prompt: string,
+  img: File,
+  imageMode: ImageMode,
+  bgmPrompt?: string
+) {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("file", img);
   form.append("imageMode", imageMode);
-  return await httpPostImg("/diffusion/synthesize/auto/upload", form);
+  if (bgmPrompt) form.append("bgmPrompt", bgmPrompt);
 
+  return httpPostFormBlob("/diffusion/synthesize/auto/upload", form);
 }
 
+// AI에게 이미지 세션 업로드
 export async function uploadImage(sessionKey: string, img: File) {
   const form = new FormData();
   form.append("session_key", sessionKey);
   form.append("product_image", img);
 
-  await httpPostForm("/gpt/dialogue/upload-image", form);
+  return httpPostForm("/gpt/dialogue/upload-image", form);
+}
+
+// 오디오 생성 (JSON → Blob)
+export async function generateAudioRaw(prompt: string, durationSec: number = 20) {
+  return httpPostJsonBlob("/audio/generate/raw", {
+    prompt,
+    duration_sec: durationSec,
+  });
 }
