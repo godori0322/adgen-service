@@ -3,6 +3,7 @@
 
 # .env 로드 (SAM_MODEL_PATH 사용)
 from dotenv import load_dotenv
+from networkx import betweenness_centrality_subset
 from transformers import CTRLPreTrainedModel
 load_dotenv()
 
@@ -14,7 +15,6 @@ import cv2
 from PIL import Image
 
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
-from realesrgan import RealESRGAN
 
 class ProductSegmentation:
     def __init__(
@@ -106,11 +106,11 @@ class ProductSegmentation:
         best_mask = select_best_mask(img_rgb, masks)
 
         # inversion 체크 (중앙이 비어 있으면 반전)
-        if mask_needs_invert(mask):
-            mask = 1 - mask
+        if mask_needs_invert(best_mask):
+            best_mask = 1 - best_mask
 
         # 경계 부드럽게 (0~1 float)
-        refined_mask = refine_mask(mask)
+        refined_mask = refine_mask(best_mask)
 
         # halo 제거
         refined_mask = remove_halo(refined_mask)
@@ -265,7 +265,7 @@ def color_variance_score(img, mask):
 # =============================================================
 # 3. 마스크 경계 복잡도(edge complexity)
 # =============================================================
-def edge_score(mask):
+def edge_complex_score(mask):
     edges = cv2.Canny((mask * 255).astype(np.uint8), 50, 150)
     score = edges.sum() / 255
     return min(score / 5, 1.0)
@@ -289,11 +289,11 @@ def select_best_mask(img_rgb, masks):
 
         center_score = mask_center_score(mask)
         color_var_score = color_variance_score(img_rgb, mask)
-        edge_score = edge_score(mask)
+        edge_score = edge_complex_score(mask)
         # 마스크 영역 점수도 반영(하지만 배경 마스크 방지를 위해 적은 비율로)
         area_score = min(area / (h * w), 1.0)
 
-        total_score = (0.4 * center_score) + (0.3 * edge_score) + (0.2 * color_var_score) + (0.1 * area_score)
+        total_score = (0.4 * center_score) + (0.35 * edge_score) + (0.15 * color_var_score) + (0.1 * area_score)
 
         if total_score > best_score:
             best_score = total_score
