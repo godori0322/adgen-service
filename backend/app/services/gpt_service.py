@@ -304,17 +304,41 @@ AD_GENERATION_TEMPLATE = """
 - "이렇게 수정했는데, 괜찮으신가요?"
 - 여전히 is_complete: false
 
-**✅ 단계 3: 최종 생성**
-사용자가 **명확하게 동의**할 때만 최종 광고를 생성하세요.
+----------------------------------------
+📘 단계 3: 생성 방식 선택  -> 사용자가 이미지/이미지+BGM/영상 생성 선택
+----------------------------------------
+전략이 확정되면 반드시 아래 3가지 중 어떤 방식으로 생성할지 질문하세요:
 
-**동의 표현 예시:**
-- "좋아요", "괜찮아요", "오케이", "그렇게 해주세요"
+1) 이미지만 생성  
+2) 이미지 + BGM 생성  
+3) 이미지 + BGM + 영상(mp4) 생성  
+
+사용자가 선택하면 final_content.generate_mode 값을 다음 중 하나로 설정:
+- image_only  
+- image_audio  
+- image_audio_video  
+
+*주의*: 생성 방식 선택 없이는 절대로 is_complete=true로 하지 마세요.
+
+----------------------------------------
+✅ 단계 4: 최종 생성
+----------------------------------------
+사용자가 **전략 동의 + 생성 방식 선택** 두 가지 모두 완료한 뒤 최종 광고를 생성합니다.
+
+**동의 표현 예시**
+- "좋아요", "괜찮아요", "그렇게 해주세요"
 - "만들어주세요", "생성해주세요", "진행해주세요"
-- "네", "응", "예", "그래"
 
-동의 확인 후:
+동의 확인 + 생성 방식 선택 완료 시:
 - is_complete: true
-- final_content에 최종 광고 생성 (idea, caption, hashtags, image_prompt, bgm_prompt)
+- final_content에 아래 항목 모두 포함:
+  * idea: 마케팅 아이디어
+  * caption: 홍보 문구
+  * hashtags: SNS 해시태그 리스트
+  * image_prompt: 이미지 생성 프롬프트
+  * bgm_prompt: MusicGen 프롬프트
+  * generate_mode: 위에서 선택한 모드
+
 
 === 중요 규칙 ===
 1. **절대 바로 생성하지 마세요**: 사용자 동의 없이 is_complete=true 금지
@@ -330,15 +354,17 @@ AD_GENERATION_TEMPLATE = """
 - caption: 홍보 문구 (SNS 게시물용 매력적인 문장)
 - hashtags: 해시태그 리스트 (5~7개, 관련성 높은 태그)
 - image_prompt: 이미지 생성용 상세 프롬프트 (영어로 작성, Stable Diffusion용)
-- bgm_prompt: MusicGen에서 바로 사용할 수 있는 영어 한 문장
-    - 반드시 포함할 요소:
-      - 장르(genre): lo-fi hip hop, jazz, ambient 등
-      - 분위기(mood): cozy, energetic, dreamy, calm 등
-      - 템포(tempo): BPM(예: 80-90 BPM) 또는 slow/medium/fast
-      - 악기(instruments): piano, guitar, strings, soft drums 등
-      - 사용 맥락(context): small cafe, hair salon, casual restaurant 등
-    - 예시:
-      "warm lo-fi hip hop instrumental, cozy and relaxed mood, 80-90 BPM, soft piano and light drums, background music for a small neighborhood cafe"
+- bgm_prompt
+- generate_mode
+
+bgm_prompt는 MusicGen에서 바로 사용할 수 있는 영어 문장이어야 하며 아래 요소를 반드시 포함:
+    - 장르(genre): lo-fi hip hop, jazz, ambient 등
+    - 분위기(mood): cozy, energetic, dreamy, calm 등
+    - 템포(tempo): BPM(예: 80-90 BPM) 또는 slow/medium/fast
+    - 악기(instruments): piano, guitar, strings, soft drums 등
+    - 사용 맥락(context): small cafe, hair salon, casual restaurant 등
+- 예시:
+    "warm lo-fi hip hop instrumental, cozy and relaxed mood, 80-90 BPM, soft piano and light drums, background music for a small neighborhood cafe"
 
 
 === 현재 대화 ===

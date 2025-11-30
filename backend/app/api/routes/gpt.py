@@ -203,5 +203,3 @@ async def upload_product_image(
             status_code=500,
             detail=f"이미지 업로드 실패: {str(e)}"
         )
-
-#

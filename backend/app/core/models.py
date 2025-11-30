@@ -49,9 +49,12 @@ class AdRequest(BaseModel):
     gpt_prompt = Column(Text, nullable=True)  # GPT에 보낸 전체 프롬프트
     gpt_output_text = Column(Text, nullable=True)  # GPT 생성 아이디어 + 캡션
     diffusion_prompt = Column(Text, nullable=True)  # Diffusion 모델에 사용된 프롬프트
+    
     image_url = Column(String(500), nullable=True)  # 생성된 이미지 URL (S3 등)
-    hashtags = Column(Text, nullable=True)  # 해시태그 (JSON string)
+    audio_url = Column(String(500), nullable=True)    # 생성된 BGM 파일 URL (/media/audio/xxx.wav)
+    video_url = Column(String(500), nullable=True)    # 이미지+오디오 합성 mp4 URL (/media/video/xxx.mp4)
 
+    hashtags = Column(Text, nullable=True)  # 해시태그 (JSON string)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationship
