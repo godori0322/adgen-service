@@ -1,4 +1,6 @@
 # schemas.py
+# backend/app/core/schemas.py
+
 # ChatMessage, DialogueRequests, DialogueResponse 통합(multi-turn)
 
 from pydantic import BaseModel, Field
@@ -34,11 +36,29 @@ class GPTRequest(BaseModel):
     text: str = Field(..., description="사용자의 요청(ex: 오늘 손님이 줄었는데...)")
     context: Optional[str] = Field(None, description="날씨, 업종, 행사 등 부가정보")
 
+     # 생성 옵션 플래그
+    generate_image: bool = Field(
+        default=True,
+        description="이미지 생성 여부 (기본값: True)",
+    )
+    generate_audio: bool = Field(
+        default=False,
+        description="BGM 생성 여부 (기본값: False)",
+    )
+    generate_video: bool = Field(
+        default=False,
+        description="이미지+오디오 mp4 합성 여부 (기본값: False, generate_audio=True일 때만 의미)",
+    )
+   
+
     class Config:
         json_schema_extra = {
             "example": {
-                "text": "오늘 손님이 너무 없는데 뭐 올리면 좋을까?",
-                "context": "서울, 비 오는 날, 일식집",
+                "text": "이번 주말 브런치 이벤트 홍보해줘",
+                "context": "서울, 카페, 주말 한정 브런치 세트",
+                "generate_image": True,
+                "generate_audio": True,
+                "generate_video": True,
             }
         }
 
@@ -55,8 +75,27 @@ class GPTResponse(BaseResponse):
 
 
 class AdGenerateResponse(GPTResponse):
-    image_base64: str = Field(..., description="base64 인코딩된 PNG 이미지 데이터(접두사 없이)")
-    audio_url: Optional[str] = Field(None, description="생성된 BGM 파일의 절대 URL")
+    idea: str
+    caption: str
+    hashtags: List[str]
+    image_prompt: str
+
+    image_base64: Optional[str] = Field(
+        None,
+        description="base64 인코딩된 PNG 이미지 데이터(접두사 없이, 내부 미리보기용)")
+    image_url: Optional[str] = Field(
+        None,
+        description="생성된 이미지를 직접 다운로드/공유할 수 있는 절대 URL",
+    )
+    audio_url: Optional[str] = Field(
+        None,
+        description="생성된 BGM을 다운로드/공유할 수 있는 절대 URL",
+    )
+    video_url: Optional[str] = Field(
+        None,
+        description="이미지와 BGM을 합성한 mp4 광고 영상의 절대 URL",
+    )
+
 
 # ==================== Audio Geneartion (Stable Audio Open) ====================
 class AudioGenerationRequest(BaseModel):
@@ -205,9 +244,14 @@ class FinalContentSchema(BaseModel):
     image_prompt: str = Field(..., description="이미지 생성용 프롬프트")
     bgm_prompt: Optional[str] = Field(
         default=None,
-        description="Stable Audio용 BGM 분위기/스타일 프롬프트",
+        description="MusicGen용 BGM 분위기/스타일 프롬프트",
     )
 
+    # 이미지/이미지+오디오/비디오 선택 옵션 추가
+    generate_mode: Optional[str] = Field(
+        default="image_only",
+        description="사용자가 선택한 생성 모드(image_only | image_audio | image_audio_vide)"
+    )
 
 # GPT 내부 응답(대화 상태 - 기본형)
 class DialogueGPTResponse(BaseModel):
@@ -371,6 +415,8 @@ class AdRequestResponse(BaseModel):
     gpt_output_text: Optional[str]
     diffusion_prompt: Optional[str]
     image_url: Optional[str]
+    audio_url: Optional[str]      # 추가 --> 히스토리/마이페이지에서 BGM/mp4 사용가능하도록
+    video_url: Optional[str]      # 추가 --> 히스토리/마이페이지에서 BGM/mp4 사용가능하도록
     hashtags: Optional[str]
     created_at: datetime
 

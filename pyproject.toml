@@ -57,6 +57,9 @@ dependencies = [
     "segment-anything @ git+https://github.com/facebookresearch/segment-anything.git",
     "mobile-sam @ git+https://github.com/ChaoningZhang/MobileSAM.git",
     "replicate>=1.0.7",
+    "moviepy>=2.2.1",
+    "ffmpeg>=1.4",
+    "imageio-ffmpeg>=0.6.0",
 ]
 
 [project.optional-dependencies]

@@ -5,6 +5,8 @@
 # - 모든 서브모델(CN, UNet, VAE, TextEncoder)을 같은 device로 강제 정렬
 # - L4 24GB 기준 fp16 사용 (CUDA), CPU면 fp32
 
+
+
 from dotenv import load_dotenv
 load_dotenv()
 

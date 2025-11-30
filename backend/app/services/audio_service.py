@@ -52,7 +52,7 @@ def _call_musicgen_via_replicate(prompt: str, duration_sec: float) -> bytes:
             input={
                 "prompt": prompt,
                 "duration": duration,
-            },
+            },  
         )
         # output 타입 정규화:
         # - [FileOutput] 인 경우 → 첫 번째만 사용
