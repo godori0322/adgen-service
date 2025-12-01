@@ -5,7 +5,7 @@
 
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, List, Any, Literal
+from typing import Optional, List, Any, Literal, Tuple
 from enum import Enum
 
 # ==================== 공통 Base 응답 ====================
@@ -214,6 +214,42 @@ class DiffusionControlResponse(BaseModel):
 class DiffusionResponse(BaseResponse):
     image_url: Optional[str] = Field(None, description="생성된 이미지 URL")
 
+# ==================== Text Layout ==========================
+
+class TextPreviewRequest(BaseModel):
+    text: str = Field(..., description="사용자가 입력한 텍스트")
+    font_mode: str = Field("regular", description="폰트 종류 (regular | bold)")
+    mode: str = Field("bottom", description="텍스트 위치 (top | middle | bottom)")
+    color: List[int] = Field(default=[255, 255, 255], description="텍스트 색상 (RGB)")
+    width: int = Field(default=768, description="미리보기 배경 이미지 가로")
+    height: int = Field(default=1024, description="미리보기 배경 이미지 세로")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "text": "오늘은 전 메뉴 10% 할인!",
+                "font_mode": "bold",
+                "mode": "bottom",
+                "color": [255, 200, 0],
+                "width": 768,
+                "height": 1024
+            }
+        }
+
+class TextPreviewResponse(BaseResponse):
+    preview_image_base64: Optional[str] = Field(
+        None, description="미리보기 이미지(base64)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "success",
+                "message": "미리보기가 생성되었습니다.",
+                "timestamp": "2025-11-11T09:00:00Z",
+                "preview_image_base64": "<base64-string>"
+            }
+        }
 
 
 # ==================== Meida Generation====================
