@@ -32,7 +32,8 @@ from backend.app.services.diffusion_service import (
 from backend.app.services.audio_service import generate_bgm_and_save
 from backend.app.services.media_service import (
     save_generated_image,
-    compose_image_and_audio_to_mp4
+    compose_image_and_audio_to_mp4,
+    overlay_caption_on_image,   # 텍스트 삽입 추가
 )
 from backend.app.core.schemas import (
     AdMediaGenerateRequest,   # 새로 만든 Request 스키마
@@ -63,11 +64,6 @@ async def generate_ad_upload(
         description="제품 이미지 파일 (PNG/JPEG)",
     ),
     # 텍스트 관련 폼 필드
-    text: str = Form(..., description="사용자가 최종적으로 요청한 문장"),
-    context: Optional[str] = Form(
-        None,
-        description="GPT 멀티턴 결과로 정리된 전략/맥락 요약 문자열",
-    ),
     idea: Optional[str] = Form(
         None,
         description="GPT가 생성한 광고 아이디어 문장",
@@ -132,8 +128,6 @@ async def generate_ad_upload(
 
         # 4) 기존 JSON 스키마로 래핑
         ad_req = AdMediaGenerateRequest(
-            text=text,
-            context=context,
             idea=idea,
             caption=caption,
             hashtags=hashtags_list,
@@ -217,12 +211,11 @@ async def generate_ad(
 
             # context는 이제 "GPT용"이 아니라 "로그용"으로만 사용
             context_str = (
-                req.context
-                or f"업종: {business_type}, 위치: {location}, 영업시간: {business_hours}, 메뉴: {menu_items_str}"
+                f"업종: {business_type}, 위치: {location}, 영업시간: {business_hours}, 메뉴: {menu_items_str}"
             )
             print(f"[사용자 정보 포함] {current_user.username}")
         else:
-            context_str = req.context or f"현재 날짜 및 시간: {current_datetime}"
+            context_str = f"현재 날짜 및 시간: {current_datetime}"
             print("[비로그인 사용자]")
 
         # ---------------------------------------------------------------
@@ -275,6 +268,7 @@ async def generate_ad(
             print("[ADS] 제품 이미지 기반 합성 포스터 생성 모드 진입")
 
             # diffusion 파이프라인 전체 호출 (Base64 → 세그멘테이션 → 합성)
+            # diffusion으로 제품+배경 합성 이미지 생성
             image_bytes = generate_poster_with_product_b64(
                 prompt=image_prompt,
                 product_image_b64=req.product_image_b64,
@@ -283,6 +277,21 @@ async def generate_ad(
                 ip_adapter_scale=None,
             )
 
+            # caption이 있으면 텍스트 합성
+            if req.caption:
+                print(f"[ADS] 캡션 텍스트 오버레이 적용: {req.caption}")
+                image_bytes = overlay_caption_on_image(
+                    image_bytes=image_bytes,
+                    caption=req.caption,
+                    mode="bottom",      # 디폴트 : 하단
+                    font_mode="bold",   # 디폴트 : 볼드
+                    font_size_ratio=0.06,
+                    color=(255, 255, 255)
+                )
+            else:
+                print("[ADS] 캡션 없음 -> 텍스트 합성 스킵")
+
+            # 텍스트 포함된 이미지 -> base64/파일로 저장
             image_base64 = base64.b64encode(image_bytes).decode("ascii")
 
             image_path = save_generated_image(image_bytes, ext="png")
@@ -347,7 +356,7 @@ async def generate_ad(
         # DB에 광고 요청 정보 저장
         ad_request = AdRequest(
             user_id=current_user.id if current_user else None,
-            voice_text=req.text,
+            voice_text=None,
             weather_info=weather_info,
             gpt_prompt=context_str,          # full 프롬프트 대신 context 요약 정도
             gpt_output_text=gpt_output_text, # GPT 결과 요약 문자열

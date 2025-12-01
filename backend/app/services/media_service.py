@@ -3,8 +3,10 @@
 
 from pathlib import Path
 from uuid import uuid4
-
 from moviepy import AudioFileClip, ImageClip, VideoFileClip  # moviepy 필요
+import io
+from PIL import Image
+from backend.app.services.text_service import TextService
 
 
 # media 루트 디렉토리 ---> DB 기능 / shared directory로 변경 필요
@@ -12,7 +14,10 @@ MEDIA_ROOT = Path("media")
 IMAGE_DIR = MEDIA_ROOT / "images"
 VIDEO_DIR = MEDIA_ROOT / "video"
 
+text_service = TextService()
 
+
+# 이미지
 def save_generated_image(image_bytes: bytes, ext: str = "png") -> Path:
     """
     Diffusion으로 생성된 이미지를 media/images 아래에 저장하고
@@ -29,6 +34,42 @@ def save_generated_image(image_bytes: bytes, ext: str = "png") -> Path:
     return file_path
 
 
+# 텍스트 합성
+def overlay_caption_on_image(
+    image_bytes: bytes,
+    caption: str,
+    mode: str = "bottom",
+    font_mode: str = "bold",
+    font_size_ratio: float = 0.06,
+    color=(255, 255, 255),
+) -> bytes:
+    """
+    Diffusion에서 생성한 이미지 bytes에 caption 텍스트를 합성해
+    다시 PNG bytes로 반환하는 함수.
+    """
+
+    # 1) bytes → PIL.Image
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    # 2) TextService를 이용한 텍스트 합성
+    img_with_text = text_service.add_text(
+        image=img,
+        text=caption,
+        mode=mode,
+        font_mode=font_mode,
+        font_size_ratio=font_size_ratio,
+        color=color,
+    )
+
+    # 3) PIL.Image → bytes
+    buf = io.BytesIO()
+    img_with_text.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+
+
+# 이미지 + 오디오 합성 함수
 def compose_image_and_audio_to_mp4(
     image_path: Path,
     audio_path: Path,

@@ -254,12 +254,6 @@ class TextPreviewResponse(BaseResponse):
 
 # ==================== Meida Generation====================
 class AdMediaGenerateRequest(BaseModel):
-    text: str = Field(..., description="사용자가 최종적으로 요청한 문장")
-    context: Optional[str] = Field(
-        default=None,
-        description="GPT 멀티턴 결과로 정리된 전략/맥락 요약 문자열",
-    )
-
     idea: Optional[str] = Field(
         default=None,
         description="GPT가 생성한 광고 아이디어 문장",
@@ -282,13 +276,13 @@ class AdMediaGenerateRequest(BaseModel):
         description="BGM 생성용 프롬프트 (GPT가 만든 것)",
     )
 
-    # 🔹 제품 이미지(Base64) 필수
+    # 제품 이미지(Base64) 필수
     product_image_b64: str = Field(
         ...,
         description="사용자가 업로드한 제품 이미지(Base64 문자열)",
     )
 
-    # 🔹 합성 모드
+    # 합성 모드
     composition_mode: CompositionMode = Field(
         default=CompositionMode.balanced,
         description="제품+배경 합성 모드 (rigid | balanced | creative)",
