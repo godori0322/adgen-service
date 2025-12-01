@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Tuple
 import unicodedata
 import re
+from sqlalchemy.orm import Session
+import io
+from backend.app.services import minio_service
 
 
 class TextService:
@@ -54,6 +57,7 @@ class TextService:
         color: Tuple[int, int, int] = (255, 255, 255),
         max_width_ratio: float = 0.8,
         line_spacing_ratio: float = 1.4,
+        type: str = "preview",
     ) -> Image.Image:
         """
         Diffusion 최종 이미지에 텍스트 삽입.
@@ -123,7 +127,18 @@ class TextService:
                 draw.text((offset_x    , y + i * line_height    ), char, font=current_font, fill=color)
 
                 offset_x += w
+        
+        if (type== "final"):
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            buffer.seek(0)
 
+            # MinIO 업로드
+            image_url = minio_service.upload_bytes(buffer.getvalue(), "image/png")
+
+            print(f"[IMAGE UPLOADED] {image_url}")
+
+            return image_url
         return image
 
     # ---------------------------------------------------------

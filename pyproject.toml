@@ -60,6 +60,7 @@ dependencies = [
     "moviepy>=2.2.1",
     "ffmpeg>=1.4",
     "imageio-ffmpeg>=0.6.0",
+    "minio>=7.2.20",
 ]
 
 [project.optional-dependencies]

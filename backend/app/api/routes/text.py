@@ -1,13 +1,19 @@
 # text.py
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Request
 from fastapi.responses import StreamingResponse
 from PIL import Image, ImageDraw
 import io
-
+from backend.app.core.database import get_db
+from sqlalchemy.orm import Session
+from typing import Optional
 from backend.app.services.text_service import TextService
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from backend.app.services import auth_service
 
 router = APIRouter(prefix="/text", tags=["Text Overlay"])
+security = HTTPBearer(auto_error=False)
+
 text_service = TextService()
 
 # ---------------------------------------------------------
@@ -28,22 +34,19 @@ async def apply_text(
     image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
     color = (color_r, color_g, color_b)
-
-    result = text_service.add_text(
+    
+    image_url = text_service.add_text(
         image=image,
         text=text,
         mode=mode,
         font_mode=font_mode,
         font_size_ratio=font_size_ratio,
         color=color,
+        type="final"
     )
 
-    buf = io.BytesIO()
-    result.save(buf, format="PNG")
-    buf.seek(0)
-
     try:
-        return StreamingResponse(buf, media_type="image/png")
+        return {"image_url": image_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -80,6 +83,7 @@ async def preview_text(
         mode=mode,
         font_mode=font_mode,
         color=color,
+        type="preview",
     )
 
     buf = io.BytesIO()
