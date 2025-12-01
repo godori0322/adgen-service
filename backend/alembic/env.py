@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # Base metadata import
 from backend.app.core.database import Base
+from backend.app.core.models import *
 
 target_metadata = Base.metadata
 
