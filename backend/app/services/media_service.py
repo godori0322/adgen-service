@@ -7,6 +7,7 @@ from moviepy import AudioFileClip, ImageClip, VideoFileClip  # moviepy 필요
 import io
 from PIL import Image
 from backend.app.services.text_service import TextService
+from tempfile import NamedTemporaryFile
 
 
 # media 루트 디렉토리 ---> DB 기능 / shared directory로 변경 필요
@@ -116,3 +117,37 @@ def compose_image_and_audio_to_mp4(
     video_clip.close()
 
     return output_path
+
+def compose_image_and_audio_to_mp4_bytes(
+    image_bytes: bytes,
+    audio_bytes: bytes,
+    fps: int = 24,
+) -> bytes:
+
+    """"
+    이미지 bytes + 오디오 bytes → mp4 bytes 반환
+    (MinIO 다운로드 없이 바로 처리)
+    """
+
+    # 임시 파일에 저장
+    tmp_img = NamedTemporaryFile(delete=False, suffix=".png")
+    tmp_img.write(image_bytes)
+    tmp_img.close()
+
+    tmp_aud = NamedTemporaryFile(delete=False, suffix=".wav")
+    tmp_aud.write(audio_bytes)
+    tmp_aud.close()
+
+    # MoviePy로 합성
+    audio_clip = AudioFileClip(tmp_aud.name)
+    image_clip = ImageClip(tmp_img.name, duration=audio_clip.duration)
+    video_clip = image_clip.with_audio(audio_clip)
+
+    tmp_video = NamedTemporaryFile(delete=False, suffix=".mp4")
+    video_clip.write_videofile(tmp_video.name, fps=fps, logger=None)
+
+    audio_clip.close()
+    video_clip.close()
+
+    with open(tmp_video.name, "rb") as f:
+        return f.read()

@@ -19,11 +19,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles 
 from backend.app.api.router import api_router
 from backend.app.core.database import engine, Base
+from backend.app.core.minio_client import minio_client, BUCKET_IMAGE, BUCKET_VIDEO, BUCKET_AUDIO
 
+            
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Voice2Marketing API Prototype")
+
+@app.on_event("startup")
+async def startup_event():
+    # FastAPI 시작 시 버킷 존재 여부 확인 + 생성
+    for bucket in [BUCKET_IMAGE, BUCKET_VIDEO, BUCKET_AUDIO]:
+        if not minio_client.bucket_exists(bucket):
+            minio_client.make_bucket(bucket)
+            print(f"📦 Bucket created: {bucket}")
+        else:
+            print(f"📦 Bucket exists: {bucket}")
 
 # media 디렉토리 정적 서빙
 app.mount(

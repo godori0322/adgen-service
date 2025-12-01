@@ -29,10 +29,11 @@ from backend.app.services.diffusion_service import (
     generate_poster_image,
     generate_poster_with_product_b64
 )
-from backend.app.services.audio_service import generate_bgm_and_save
+from backend.app.services.audio_service import generate_bgm_and_save, generate_bgm_bytes
 from backend.app.services.media_service import (
     save_generated_image,
     compose_image_and_audio_to_mp4,
+    compose_image_and_audio_to_mp4_bytes,
     overlay_caption_on_image,   # 텍스트 삽입 추가
 )
 from backend.app.core.schemas import (
@@ -49,6 +50,8 @@ from backend.app.core.schemas import (
 from backend.app.core.database import get_db
 from backend.app.core.models import User, AdRequest
 from backend.app.services import auth_service
+
+from backend.app.services import minio_service
 
 
 
@@ -251,7 +254,6 @@ async def generate_ad(
 
         image_base64: str = ""
         image_url: Optional[str] = None
-        image_path: Optional[Path] = None
 
         if req.generate_image:
             if not image_prompt:
@@ -278,7 +280,7 @@ async def generate_ad(
             )
 
             # caption이 있으면 텍스트 합성
-            if req.caption:
+            if req.caption and req.generate_video:
                 print(f"[ADS] 캡션 텍스트 오버레이 적용: {req.caption}")
                 image_bytes = overlay_caption_on_image(
                     image_bytes=image_bytes,
@@ -290,14 +292,11 @@ async def generate_ad(
                 )
             else:
                 print("[ADS] 캡션 없음 -> 텍스트 합성 스킵")
+                
+            # MinIO 업로드
+            image_url = minio_service.upload_bytes(image_bytes, content_type="image/png")
 
-            # 텍스트 포함된 이미지 -> base64/파일로 저장
-            image_base64 = base64.b64encode(image_bytes).decode("ascii")
-
-            image_path = save_generated_image(image_bytes, ext="png")
-            image_url = f"{base_url}/media/images/{image_path.name}"
-
-            print(f"[이미지 생성/저장 완료] {image_path}")
+            print(f"[이미지 생성/저장 완료] {image_url}")
         else:
             print("[옵션] 이미지 생성 비활성화 상태")
 
@@ -306,7 +305,6 @@ async def generate_ad(
         # 3) 오디오 생성 (옵션)
         # -------------------------
         audio_url: Optional[str] = None
-        audio_file_path: Optional[Path] = None
 
         if req.generate_audio:
             audio_req = AudioGenerationRequest(
@@ -314,13 +312,12 @@ async def generate_ad(
                 duration_sec=12.0,  # PoC에서 고정 길이
             )
             # "/media/audio/xxxx.wav" 형태의 상대 경로
-            relative_audio_path = generate_bgm_and_save(audio_req)
+            audio_bytes = generate_bgm_bytes(audio_req)
 
-            audio_url = f"{base_url}{relative_audio_path}"
-            # 실제 파일 경로 (mp4 합성용)
-            audio_file_path = Path("media/audio") / Path(relative_audio_path).name
+            # MinIO 업로드
+            audio_url = minio_service.upload_bytes(audio_bytes, content_type="audio/wav")
 
-            print(f"[BGM 생성/저장 완료] {audio_file_path}")
+            print(f"[BGM 생성/저장 완료] {audio_url}")
         else:
             print("[옵션] 오디오 생성 비활성화 상태")
 
@@ -332,16 +329,21 @@ async def generate_ad(
 
         if req.generate_video:
             # mp4는 이미지 + 오디오가 모두 있을 때만 의미 있음
-            if not (image_path and audio_file_path):
-                print("[mp4 합성 스킵] image_path 또는 audio_file_path 없음")
+            if not (image_url and audio_url):
+                print("[mp4 합성 스킵] image_url 또는 audio_url 없음")
             else:
                 try:
-                    video_path = compose_image_and_audio_to_mp4(
-                        image_path=image_path,
-                        audio_path=audio_file_path,
+                    video_bytes = compose_image_and_audio_to_mp4_bytes(
+                        image_bytes=image_bytes,
+                        audio_bytes=audio_bytes,
                     )
-                    video_url = f"{base_url}/media/video/{video_path.name}"
-                    print(f"[mp4 합성 완료] {video_path}")
+                    
+                    video_url = minio_service.upload_bytes(
+                        video_bytes,
+                        content_type="video/mp4",
+                    )
+                    print(f"[mp4 합성/업로드 완료] {video_url}")
+
                 except Exception as e:
                     print(f"[mp4 합성 실패] {e}")
         else:

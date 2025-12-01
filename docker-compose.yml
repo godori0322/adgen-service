@@ -20,16 +20,20 @@ services:
   minio:
     image: minio/minio:latest
     container_name: adgen_minio
-    command: server /data --console-address ":9001"
+    restart: unless-stopped
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: admin1234
     ports:
       - "9000:9000"   # S3 API
       - "9001:9001"   # MinIO 콘솔
+    command: server /data --config-dir /etc/minio --console-address ":9001"
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      timeout: 20s
+      retries: 10
     volumes:
       - minio-data:/data
-    restart: always
     networks:
       - app-net
 
