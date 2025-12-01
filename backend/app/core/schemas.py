@@ -527,3 +527,29 @@ class MarketingStrategy(BaseModel):
             "content_style": ["감성 사진"],
         },
     )
+
+
+# ==================== History ====================
+
+class AdHistoryItem(BaseModel):
+    """광고 히스토리 개별 항목"""
+    id: int = Field(..., description="광고 요청 ID")
+    created_at: datetime = Field(..., description="생성 날짜 및 시간")
+    idea: Optional[str] = Field(None, description="광고 아이디어")
+    caption: Optional[str] = Field(None, description="캡션")
+    hashtags: Optional[str] = Field(None, description="해시태그 문자열")
+    image_url: Optional[str] = Field(None, description="이미지 URL")
+    audio_url: Optional[str] = Field(None, description="오디오 URL")
+    video_url: Optional[str] = Field(None, description="비디오 URL")
+
+    class Config:
+        from_attributes = True
+
+
+class AdHistoryResponse(BaseModel):
+    """광고 히스토리 응답"""
+    total: int = Field(..., description="전체 히스토리 개수")
+    history: List[AdHistoryItem] = Field(..., description="히스토리 항목 리스트")
+
+    class Config:
+        from_attributes = True
