@@ -56,7 +56,7 @@ export function useCaptionEditor() {
       if (!imgFile) {
         return { success: false };
       }
-      const blob = await insertCaptionRequest(
+      const result = await insertCaptionRequest(
         caption,
         fontMode,
         mode,
@@ -65,9 +65,11 @@ export function useCaptionEditor() {
         textColor,
         imgFile
       );
-      const base64 = await blobToBase64(blob);
+      const baseUrl = import.meta.env.VITE_MINIO_ENDPOINT ?? "";
 
-      return { success: true, data: base64 };
+      const imageUrl = result.image_url ? baseUrl + result.image_url : null;
+
+      return { success: true, data: imageUrl };
     } catch (error) {
       console.error("Caption apply error:", error);
       return { success: false };

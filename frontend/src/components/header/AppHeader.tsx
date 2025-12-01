@@ -1,12 +1,12 @@
 // src/components/header/AppHeader.tsx
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import ConfirmModal from "../common/ConfirmModal";
 
 export default function AppHeader() {
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
   const location = useLocation();
   const { isLogin, logout } = useAuth();
   const { resetMessages } = useChat();

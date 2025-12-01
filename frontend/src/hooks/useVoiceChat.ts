@@ -1,17 +1,12 @@
 // src/hooks/useVoiceChat.ts
 import { useEffect, useRef, useState } from "react";
-import {
-  generateAudioRaw,
-  generateDialogueRequest,
-  generateSyntheSizeDiffusionRequest,
-  uploadImage,
-} from "../api/generate";
+import { adsGenerateRequest, generateDialogueRequest, uploadImage } from "../api/generate";
 import type { ImageMode } from "../components/voice/ImageModeSelectorBubble";
 import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
 import { useAuth } from "../context/AuthContext";
 import { useChat } from "../context/ChatContext";
 import { formatChatResponse } from "../utils/chatFormatter";
-import { blobToBase64, blobToFile, fileToBase64 } from "../utils/files";
+import { blobToFile, fileToBase64 } from "../utils/files";
 import { useDotsAnimation } from "./useDotsAnimation";
 import { useWhisper } from "./useWhisper";
 
@@ -33,7 +28,7 @@ export function useVoiceChat() {
 
   const imagePromptRef = useRef<string | null>(null);
   const bgmPromptRef = useRef<string | null>(null);
-  const captionTextRef = useRef<string | null>(null);
+  const contentRef = useRef<any | null>(null);
 
   const updateSessionKey = (key: string) => {
     sessionKeyRef.current = key;
@@ -44,60 +39,96 @@ export function useVoiceChat() {
   // 이미지 or 동영상 생성
   const processImageOrVideo = async () => {
     const mode = userSelectBgmRef.current;
-    if (!uploadedImageFile || !imageMode || !imagePromptRef.current || !mode) return;
+    if (
+      !uploadedImageFile ||
+      !imageMode ||
+      !imagePromptRef.current ||
+      !bgmPromptRef.current ||
+      !mode
+    )
+      return;
 
     const msgId = Date.now();
     addMessage({
       role: "assistant",
       tempId: msgId,
-      content: mode === "video" ? "🎬 동영상 생성 중..." : "🖼️ 이미지 생성 중...",
+      content:
+        mode === "video"
+          ? "🎬 동영상 생성 중..."
+          : mode === "image"
+          ? "🖼️ 이미지 생성 중..."
+          : "이미지 및 음원 생성 중...",
     });
 
     try {
-      const blob = await generateSyntheSizeDiffusionRequest(
-        imagePromptRef.current,
-        uploadedImageFile,
+      const uploadImageBase64 = await fileToBase64(uploadedImageFile);
+      const result = await adsGenerateRequest(
+        contentRef.current,
+        uploadImageBase64,
         imageMode,
-        mode === "video" ? bgmPromptRef.current! : undefined
+        mode,
+        imagePromptRef.current,
+        bgmPromptRef.current
       );
-
-      if (!blob) throw new Error("Blob empty");
-
-      const base64 = await blobToBase64(blob, mode === "video" ? "video" : "image");
-
+      const baseUrl = import.meta.env.VITE_MINIO_ENDPOINT ?? "";
+      const imageUrl = result.image_url ? baseUrl + result.image_url : null;
+      const videoUrl = result.video_url ? baseUrl + result.video_url : null;
+      const audioUrl = result.audio_url ? baseUrl + result.audio_url : null;
       updateTempMessage(msgId, {
-        content: mode === "video" ? "🎬 동영상 생성 완료!" : "🖼️ 이미지 생성 완료!",
-        ...(mode === "video" ? { video: base64 } : { img: base64 }),
+        content:
+          mode === "video"
+            ? "🎬 동영상 생성 완료!"
+            : mode === "image"
+            ? "🖼️ 이미지 생성 완료!"
+            : "🎶 이미지 및 음악 생성 완료!",
+        ...(mode === "video"
+          ? { video: videoUrl }
+          : mode === "image"
+          ? { img: imageUrl }
+          : { img: imageUrl, audio: audioUrl }),
       });
 
-      if (mode === "image") {
-        const tempId = Date.now();
-        const imgObj = new Image();
-        imgObj.src = base64;
-        const resultFile = blobToFile(blob, "generated_image.png");
-        imgObj.onload = () => {
-          if (captionTextRef.current) {
-            addMessage({
-              tempId,
-              role: "assistant",
-              content: "📝 생성된 광고 문구를 이미지에 넣어볼까요?",
-              captionSelect: true,
-              textData: {
-                caption: captionTextRef.current,
-                imgWidth: imgObj.width,
-                imgHeight: imgObj.height,
-                file: resultFile,
-              },
-            });
-            setIsCaptionEditing(true);
-          }
-        };
+      if (mode === "video") {
+        addMessage({
+          role: "assistant",
+          content: `대화가 종료되었습니다 😊\n원하시면 음성으로 새로운 광고를 시작해주세요!`,
+        });
+
+        resetChatFlow();
+        return;
       }
 
-      // 따로일 경우 → 이미지 완료 후 음악 생성
-      if (mode === "separate") {
-        await processAudio();
-      }
+      const tempId = Date.now();
+      const imgObj = new Image();
+      imgObj.src = imageUrl;
+
+      imgObj.onerror = () => {
+        addMessage({
+          role: "assistant",
+          content: "이미지 로딩에 실패했어요. 다시 시도해주세요 😢",
+          fail: true,
+        });
+      };
+      imgObj.onload = async () => {
+        if (contentRef.current) {
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+          const resultFile = blobToFile(blob, "generated_image.png");
+          addMessage({
+            tempId,
+            role: "assistant",
+            content: "📝 생성된 광고 문구를 이미지에 넣어볼까요?",
+            captionSelect: true,
+            textData: {
+              caption: contentRef.current.caption,
+              imgWidth: imgObj.width,
+              imgHeight: imgObj.height,
+              file: resultFile,
+            },
+          });
+          setIsCaptionEditing(true);
+        }
+      };
     } catch (err) {
       updateTempMessage(msgId, {
         content:
@@ -108,33 +139,6 @@ export function useVoiceChat() {
       });
     } finally {
       setUploadedImageFile(null); // 다음 업로드 대기
-    }
-  };
-
-  // 음원 생성
-  const processAudio = async () => {
-    if (!bgmPromptRef.current) return;
-
-    const msgId = Date.now();
-    addMessage({
-      role: "assistant",
-      tempId: msgId,
-      content: "🎵 음악 생성 중...",
-    });
-
-    try {
-      const audioBlob = await generateAudioRaw(bgmPromptRef.current);
-      const base64Audio = await blobToBase64(audioBlob, "audio");
-
-      updateTempMessage(msgId, {
-        content: "🎶 음악 생성 완료!",
-        audio: base64Audio,
-      });
-    } catch {
-      updateTempMessage(msgId, {
-        content: "음악 생성 실패! 다시 시도해주세요.",
-        fail: true,
-      });
     }
   };
 
@@ -158,12 +162,7 @@ export function useVoiceChat() {
       resetChatFlow();
       return;
     }
-
-    if (mode === "separate") {
-      await processAudio();
-    } else {
-      await processImageOrVideo();
-    }
+    await processImageOrVideo();
   };
 
   const onAudioSend = async (audioBlob: Blob) => {
@@ -255,8 +254,12 @@ export function useVoiceChat() {
         : adRes.last_ment ?? "";
       updateTempMessage(assistantTempId, { content });
 
-      if (adRes.final_content?.caption) {
-        captionTextRef.current = adRes.final_content.caption;
+      if (adRes.final_content) {
+        contentRef.current = {
+          idea: adRes.final_content.idea,
+          caption: adRes.final_content.caption,
+          hashtags: adRes.final_content.hashtags,
+        };
       }
 
       // Diffusion 이미지 생성 단계
@@ -356,7 +359,7 @@ export function useVoiceChat() {
     // 종료 안내 멘트
     addMessage({
       role: "assistant",
-      content: "대화가 종료되었습니다 😊\n원하시면 음성으로 새로운 광고를 시작해주세요!",
+      content: `대화가 종료되었습니다 😊\n원하시면 음성으로 새로운 광고를 시작해주세요!`,
     });
 
     resetChatFlow();
@@ -384,7 +387,7 @@ export function useVoiceChat() {
     userSelectBgmRef.current = null;
     imagePromptRef.current = null;
     bgmPromptRef.current = null;
-    captionTextRef.current = null;
+    contentRef.current = null;
   };
   return {
     messages,
@@ -398,6 +401,7 @@ export function useVoiceChat() {
     retryProcess,
     resetChatFlow,
     onInsertCaption,
+    isCaptionEditing,
     isUiBlocking,
   };
 }
