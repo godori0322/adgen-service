@@ -196,7 +196,7 @@ async def generate_ad(
 
         if current_user:
             # 로그인한 경우: 사용자 정보 활용
-            weather_info = get_weather(current_user.location or "Seoul")
+            weather_info = await get_weather(current_user.location or "Seoul")
             business_type = current_user.business_type or "정보 없음"
             location = current_user.location or "정보 없음"
             business_hours = current_user.business_hours or "정보 없음"

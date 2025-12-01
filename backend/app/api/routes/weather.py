@@ -9,7 +9,7 @@ router = APIRouter(prefix="/weather", tags=["Weather"])
 @router.get("/", response_model=WeatherResponse)
 async def weather(city: str = Query("Seoul", description="도시 이름")):
     try:
-        data = get_weather(city)
+        data = await get_weather(city)
         return WeatherResponse(
             city=city,
             temp=data["main"]["temp"],
