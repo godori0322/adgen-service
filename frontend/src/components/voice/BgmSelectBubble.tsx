@@ -26,7 +26,7 @@ export default function BgmSelectBubble({ onSelect }: { onSelect: (option: BgmOp
           ${selected && selected !== "video" ? disabledClass : ""}
         `}
       >
-        🎬 동영상으로
+        🎬 동영상(릴스)으로
       </button>
 
       {/* 🖼️ 이미지만 */}

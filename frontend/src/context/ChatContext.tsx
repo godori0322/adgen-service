@@ -10,12 +10,15 @@ export interface ChatMessage {
   tempId?: number;
   modeSelect?: boolean;
   bgmSelect?: boolean;
-  parsed?: {
-    idea: string;
-    caption: string;
-    hashtags?: string[];
+  textData?: {
+    caption?: string;
+    imgWidth?: number;
+    imgHeight?: number;
+    file?: File;
   };
-  retryType?: "image" | "video" | "audio";
+  caption?: string;
+  fail?: boolean;
+  captionSelect?: boolean;
 }
 
 interface ChatContextValue {

@@ -4,7 +4,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Pretendard", "sans-serif"], 
+        sans: ["Pretendard", "ui-sans-serif", "system-ui"],
       },
     },
   },
