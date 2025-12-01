@@ -14,6 +14,8 @@ from PIL import Image
 from backend.app.services.diffusion_service import (
     synthesize_image,
     generate_poster_image,
+    run_auto_synthesis,
+    generate_poster_with_product_b64
 )
 from backend.app.services.segmentation import ProductSegmentation
 from backend.app.core.diffusion_presets import resolve_preset
@@ -54,20 +56,20 @@ def _get_segmentation_model() -> ProductSegmentation:
 # 유틸리티 함수 (Base64 변환은 API 경계에서 처리)
 # ======================================================================
 
-def _base64_to_image(base64_string: str) -> Optional[Image.Image]:
-    """Base64 문자열을 PIL Image 객체로 변환."""
-    try:
-        if not base64_string:
-            return None
-        # "data:image/png;base64,..." 같은 prefix 제거
-        if "," in base64_string:
-            base64_string = base64_string.split(",", 1)[1]
+# def _base64_to_image(base64_string: str) -> Optional[Image.Image]:
+#     """Base64 문자열을 PIL Image 객체로 변환."""
+#     try:
+#         if not base64_string:
+#             return None
+#         # "data:image/png;base64,..." 같은 prefix 제거
+#         if "," in base64_string:
+#             base64_string = base64_string.split(",", 1)[1]
 
-        image_bytes = base64.b64decode(base64_string)
-        return Image.open(BytesIO(image_bytes)).convert("RGB")
-    except Exception as e:
-        print(f"[ERROR] Base64 to image conversion failed: {e}")
-        raise ValueError(f"Invalid Base64 image data provided: {e}")
+#         image_bytes = base64.b64decode(base64_string)
+#         return Image.open(BytesIO(image_bytes)).convert("RGB")
+#     except Exception as e:
+#         print(f"[ERROR] Base64 to image conversion failed: {e}")
+#         raise ValueError(f"Invalid Base64 image data provided: {e}")
 
 
 def _image_to_base64(image: Image.Image) -> str:
@@ -77,10 +79,10 @@ def _image_to_base64(image: Image.Image) -> str:
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
-def _mask_array_to_pil(mask_array: np.ndarray) -> Image.Image:
-    """SAM 마스크(ndarray)를 흑백(L) 모드 PIL 이미지로 변환."""
-    scaled = np.clip(mask_array * 255.0, 0, 255).astype("uint8")
-    return Image.fromarray(scaled, mode="L")
+# def _mask_array_to_pil(mask_array: np.ndarray) -> Image.Image:
+#     """SAM 마스크(ndarray)를 흑백(L) 모드 PIL 이미지로 변환."""
+#     scaled = np.clip(mask_array * 255.0, 0, 255).astype("uint8")
+#     return Image.fromarray(scaled, mode="L")
 
 
 def _parse_optional_float(value: str | None) -> float | None:
@@ -148,38 +150,75 @@ def _run_auto_synthesis(
 # API 라우트
 # ======================================================================
 
+# @router.post("/synthesize/auto", response_model=DiffusionControlResponse)
+# async def diffusion_synthesize_auto(request_body: DiffusionAutoRequest = Body(...)):
+#     """
+#     JSON Base64 버전:
+#     - product_image_b64만 받아서
+#       1) SAM으로 누끼/마스크 추출
+#       2) CompositionMode 프리셋 + (옵션) override 적용
+#       3) 최종 합성 이미지 Base64로 반환
+#     """
+#     print("[API] Received auto synthesis request.")
+
+#     try:
+#         original_image = _base64_to_image(request_body.product_image_b64)
+#         if original_image is None:
+#             raise ValueError("Product image is missing or invalid.")
+
+#         # CPU/GPU 작업을 백그라운드 스레드에서 실행 + 동시성 제한
+#         async with _request_semaphore:
+#             final_image_pil = await asyncio.to_thread(
+#                 _run_auto_synthesis,
+#                 original_image=original_image,
+#                 prompt=request_body.prompt or "",
+#                 mode=request_body.composition_mode,
+#                 control_weight=request_body.control_weight,
+#                 ip_adapter_scale=request_body.ip_adapter_scale,
+#             )
+#         final_image_b64 = _image_to_base64(final_image_pil)
+#         print("[API] Auto synthesis successful. Returning Base64 image.")
+
+#         return DiffusionControlResponse(
+#             image_b64=final_image_b64,
+#             status="success",   # BaseResponse 상속 구조 맞춤
+#             message="Image synthesis successful.",
+#         )
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         print(f"[FATAL][AUTO] An unexpected error occurred: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/synthesize/auto", response_model=DiffusionControlResponse)
 async def diffusion_synthesize_auto(request_body: DiffusionAutoRequest = Body(...)):
     """
     JSON Base64 버전:
     - product_image_b64만 받아서
-      1) SAM으로 누끼/마스크 추출
-      2) CompositionMode 프리셋 + (옵션) override 적용
-      3) 최종 합성 이미지 Base64로 반환
+      1) 세그멘테이션 + 프리셋 + 합성 (서비스 레이어)
+      2) 최종 이미지를 Base64로 반환
     """
     print("[API] Received auto synthesis request.")
 
     try:
-        original_image = _base64_to_image(request_body.product_image_b64)
-        if original_image is None:
-            raise ValueError("Product image is missing or invalid.")
-
-        # CPU/GPU 작업을 백그라운드 스레드에서 실행 + 동시성 제한
         async with _request_semaphore:
-            final_image_pil = await asyncio.to_thread(
-                _run_auto_synthesis,
-                original_image=original_image,
-                prompt=request_body.prompt or "",
-                mode=request_body.composition_mode,
-                control_weight=request_body.control_weight,
-                ip_adapter_scale=request_body.ip_adapter_scale,
+            image_bytes = await asyncio.to_thread(
+                generate_poster_with_product_b64,
+                request_body.prompt or "",
+                request_body.product_image_b64,
+                request_body.composition_mode,
+                request_body.control_weight,
+                request_body.ip_adapter_scale,
             )
-        final_image_b64 = _image_to_base64(final_image_pil)
+
+        final_image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         print("[API] Auto synthesis successful. Returning Base64 image.")
 
         return DiffusionControlResponse(
             image_b64=final_image_b64,
-            status="success",   # BaseResponse 상속 구조 맞춤
+            status="success",
             message="Image synthesis successful.",
         )
 
@@ -188,6 +227,82 @@ async def diffusion_synthesize_auto(request_body: DiffusionAutoRequest = Body(..
     except Exception as e:
         print(f"[FATAL][AUTO] An unexpected error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+# @router.post(
+#     "/synthesize/auto/upload",
+#     response_class=StreamingResponse,
+#     responses={
+#         200: {
+#             "content": {"image/png": {}},
+#             "description": "누끼+배경 합성된 최종 PNG 이미지",
+#         }
+#     },
+# )
+# async def diffusion_synthesize_auto_upload(
+#     file: UploadFile = File(...),
+#     prompt: str = Form(
+#         "A cinematic, studio-lit product hero shot on a clean background"
+#     ),
+#     composition_mode: CompositionMode = Form(
+#         CompositionMode.balanced,
+#         description="합성 모드 (rigid/balanced/creative)",
+#     ),
+#     # Swagger Form에서는 빈 문자열("")이 들어올 수 있으므로 raw 문자열로 받음
+#     control_weight_raw: str | None = Form(
+#         None,
+#         description="프리셋 ControlNet 값을 덮어쓰고 싶을 때만 지정 (비우면 프리셋 사용)",
+#     ),
+#     ip_adapter_scale_raw: str | None = Form(
+#         None,
+#         description="프리셋 IP_Adapter 값을 덮어쓰고 싶을 때만 지정 (비우면 프리셋 사용)",
+#     ),
+# ):
+#     """
+#     파일 업로드 버전:
+#     1) 파일로 이미지 업로드
+#     2) MobileSAM + SAM으로 누끼/마스크 추출
+#     3) CompositionMode 프리셋 + (옵션) control/ip override 적용
+#     4) PNG 이미지로 바로 응답
+#     """
+#     print("[API] Received auto synthesis upload request.")
+
+#     try:
+#         original_image = Image.open(file.file).convert("RGB")
+#     except Exception:
+#         raise HTTPException(status_code=400, detail="Invalid image upload.")
+
+#     # 문자열 → float/None 변환 ("" → None)
+#     control_weight = _parse_optional_float(control_weight_raw)
+#     ip_adapter_scale = _parse_optional_float(ip_adapter_scale_raw)
+
+#     try:
+#         async with _request_semaphore:
+#             final_image_pil = await asyncio.to_thread(
+#                 _run_auto_synthesis,
+#                 original_image=original_image,
+#                 prompt=prompt or "",
+#                 mode=composition_mode,
+#                 control_weight=control_weight,
+#                 ip_adapter_scale=ip_adapter_scale,
+#             )
+#         print("[API] Auto synthesis (upload) successful. Returning PNG image.")
+
+#         buf = io.BytesIO()
+#         final_image_pil.save(buf, format="PNG")
+#         buf.seek(0)
+
+#         return StreamingResponse(
+#             buf,
+#             media_type="image/png",
+#         )
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         print(f"[FATAL][AUTO][UPLOAD] An unexpected error occurred: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post(
@@ -209,7 +324,6 @@ async def diffusion_synthesize_auto_upload(
         CompositionMode.balanced,
         description="합성 모드 (rigid/balanced/creative)",
     ),
-    # Swagger Form에서는 빈 문자열("")이 들어올 수 있으므로 raw 문자열로 받음
     control_weight_raw: str | None = Form(
         None,
         description="프리셋 ControlNet 값을 덮어쓰고 싶을 때만 지정 (비우면 프리셋 사용)",
@@ -219,13 +333,6 @@ async def diffusion_synthesize_auto_upload(
         description="프리셋 IP_Adapter 값을 덮어쓰고 싶을 때만 지정 (비우면 프리셋 사용)",
     ),
 ):
-    """
-    파일 업로드 버전:
-    1) 파일로 이미지 업로드
-    2) MobileSAM + SAM으로 누끼/마스크 추출
-    3) CompositionMode 프리셋 + (옵션) control/ip override 적용
-    4) PNG 이미지로 바로 응답
-    """
     print("[API] Received auto synthesis upload request.")
 
     try:
@@ -233,20 +340,20 @@ async def diffusion_synthesize_auto_upload(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid image upload.")
 
-    # 문자열 → float/None 변환 ("" → None)
     control_weight = _parse_optional_float(control_weight_raw)
     ip_adapter_scale = _parse_optional_float(ip_adapter_scale_raw)
 
     try:
         async with _request_semaphore:
             final_image_pil = await asyncio.to_thread(
-                _run_auto_synthesis,
-                original_image=original_image,
-                prompt=prompt or "",
-                mode=composition_mode,
-                control_weight=control_weight,
-                ip_adapter_scale=ip_adapter_scale,
+                run_auto_synthesis,
+                original_image,
+                prompt or "",
+                composition_mode,
+                control_weight,
+                ip_adapter_scale,
             )
+
         print("[API] Auto synthesis (upload) successful. Returning PNG image.")
 
         buf = io.BytesIO()
@@ -262,6 +369,7 @@ async def diffusion_synthesize_auto_upload(
     except Exception as e:
         print(f"[FATAL][AUTO][UPLOAD] An unexpected error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ----------------------------------------------------------------------------

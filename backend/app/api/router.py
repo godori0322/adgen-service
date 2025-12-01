@@ -1,7 +1,7 @@
 # router.py
 
 from fastapi import APIRouter
-from backend.app.api.routes import whisper, gpt, audio, diffusion, weather, ads, auth, segmentation_test, text
+from backend.app.api.routes import whisper, gpt, audio, diffusion, weather, ads, auth, segmentation_test, history, text
 
 api_router = APIRouter()
 
@@ -13,6 +13,7 @@ api_router.include_router(diffusion.router)
 api_router.include_router(weather.router)
 api_router.include_router(ads.router)
 api_router.include_router(text.router)
+api_router.include_router(history.router)
 
 # 제품 이미지 segmentation 테스트
 api_router.include_router(segmentation_test.router)
