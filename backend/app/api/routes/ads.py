@@ -6,19 +6,45 @@ from datetime import datetime
 import base64
 import json
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from backend.app.core.schemas import (
+    AdMediaGenerateRequest,
+    AdGenerateResponse,
+    AudioGenerationRequest,
+    CompositionMode,
+)
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    UploadFile,
+    File,
+    Form,
+    Request,
+    Depends,
+)
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from backend.app.services.weather_service import get_weather
-from backend.app.services.gpt_service import generate_marketing_idea
-from backend.app.services.diffusion_service import generate_poster_image
+from backend.app.services.diffusion_service import (
+    generate_poster_image,
+    generate_poster_with_product_b64
+)
 from backend.app.services.audio_service import generate_bgm_and_save
 from backend.app.services.media_service import (
     save_generated_image,
     compose_image_and_audio_to_mp4
 )
-from backend.app.core.schemas import GPTRequest, AdGenerateResponse, AudioGenerationRequest
+from backend.app.core.schemas import (
+    AdMediaGenerateRequest,   # 새로 만든 Request 스키마
+    AdGenerateResponse,       # 기존 Response 그대로 사용
+    AudioGenerationRequest,
+)
+from backend.app.core.schemas import (
+    AdMediaGenerateRequest,
+    AdGenerateResponse,
+    AudioGenerationRequest,
+    CompositionMode,
+)
 from backend.app.core.database import get_db
 from backend.app.core.models import User, AdRequest
 from backend.app.services import auth_service
@@ -28,9 +54,120 @@ from backend.app.services import auth_service
 router = APIRouter(prefix="/ads", tags=["Ad Generation"])
 security = HTTPBearer(auto_error=False)
 
+@router.post("/generate/upload", response_model=AdGenerateResponse)
+async def generate_ad_upload(
+    request: Request,
+    # 파일 업로드
+    product_image: UploadFile = File(
+        ...,
+        description="제품 이미지 파일 (PNG/JPEG)",
+    ),
+    # 텍스트 관련 폼 필드
+    text: str = Form(..., description="사용자가 최종적으로 요청한 문장"),
+    context: Optional[str] = Form(
+        None,
+        description="GPT 멀티턴 결과로 정리된 전략/맥락 요약 문자열",
+    ),
+    idea: Optional[str] = Form(
+        None,
+        description="GPT가 생성한 광고 아이디어 문장",
+    ),
+    caption: Optional[str] = Form(
+        None,
+        description="SNS/포스터에 들어갈 메인 카피 문장",
+    ),
+    hashtags: Optional[str] = Form(
+        None,
+        description="쉼표(,)로 구분된 해시태그 문자열 예: #브런치,#서울카페,#주말특별",
+    ),
+    image_prompt: str = Form(
+        ...,
+        description="이미지 생성용 프롬프트 (예: A cozy cafe setting ...)",
+    ),
+    bgm_prompt: Optional[str] = Form(
+        None,
+        description="BGM 생성용 프롬프트",
+    ),
+    composition_mode: CompositionMode = Form(
+        CompositionMode.balanced,
+        description="합성 모드 (rigid/balanced/creative)",
+    ),
+    generate_image: bool = Form(
+        True,
+        description="이미지 생성 여부 플래그",
+    ),
+    generate_audio: bool = Form(
+        False,
+        description="BGM 생성 여부 플래그",
+    ),
+    generate_video: bool = Form(
+        False,
+        description="이미지 + 오디오 mp4 합성 여부 플래그",
+    ),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """
+    Swagger/테스트용 파일 업로드 버전 광고 생성 엔드포인트 정의.
+    - product_image: 파일 업로드
+    - 나머지 필드: form-data 텍스트 필드
+    - 내부에서 AdMediaGenerateRequest로 변환 후 기존 generate_ad 재사용
+    """
+    try:
+        # 1) 업로드 이미지 → bytes
+        product_bytes = await product_image.read()
+
+        # 2) bytes → Base64 문자열
+        product_image_b64 = base64.b64encode(product_bytes).decode("ascii")
+
+        # 3) 해시태그 문자열 → 리스트 변환
+        if hashtags:
+            hashtags_list = [
+                h.strip()
+                for h in hashtags.split(",")
+                if h.strip()
+            ]
+        else:
+            hashtags_list = []
+
+        # 4) 기존 JSON 스키마로 래핑
+        ad_req = AdMediaGenerateRequest(
+            text=text,
+            context=context,
+            idea=idea,
+            caption=caption,
+            hashtags=hashtags_list,
+            image_prompt=image_prompt,
+            bgm_prompt=bgm_prompt,
+            product_image_b64=product_image_b64,
+            composition_mode=composition_mode,
+            generate_image=generate_image,
+            generate_audio=generate_audio,
+            generate_video=generate_video,
+        )
+
+        # 5) 기존 generate_ad 로직 재사용
+        return await generate_ad(
+            req=ad_req,
+            request=request,
+            credentials=credentials,
+            db=db,
+        )
+    except HTTPException:
+        # generate_ad 내부에서 일어난 HTTPException 그대로 전달
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"[ADS][UPLOAD][ERROR] {repr(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
 @router.post("/generate", response_model=AdGenerateResponse)
 async def generate_ad(
-    req: GPTRequest, 
+    req: AdMediaGenerateRequest, 
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
@@ -48,6 +185,9 @@ async def generate_ad(
     - generate_video: 이미지 + 오디오 mp4 합성
     """
     try:
+        # 0-0) base_url 계산
+        base_url = str(request.base_url).rstrip("/")
+
         # ---------------------------------------------------------------
         # 0) 로그인/비로그인 분기 + 컨텍스트 구성
         # ---------------------------------------------------------------
@@ -66,7 +206,7 @@ async def generate_ad(
             business_type = current_user.business_type or "정보 없음"
             location = current_user.location or "정보 없음"
             business_hours = current_user.business_hours or "정보 없음"
-            
+
             menu_items_str = "정보 없음"
             if current_user.menu_items:
                 try:
@@ -74,47 +214,42 @@ async def generate_ad(
                     menu_items_str = ", ".join(menu_list)
                 except:
                     menu_items_str = current_user.menu_items
-            
-            context = f"""
-업종: {business_type}
-위치: {location}
-메뉴/서비스: {menu_items_str}
-영업시간: {business_hours}
-날씨: {weather_info}
-현재 날짜 및 시간: {current_datetime}
-            """.strip()
+
+            # context는 이제 "GPT용"이 아니라 "로그용"으로만 사용
+            context_str = (
+                req.context
+                or f"업종: {business_type}, 위치: {location}, 영업시간: {business_hours}, 메뉴: {menu_items_str}"
+            )
             print(f"[사용자 정보 포함] {current_user.username}")
         else:
-            # 비로그인 경우: 기본 정보 및 날짜/시간 제공
-            context = f"현재 날짜 및 시간: {current_datetime}"
-            print(f"[비로그인 사용자]")
+            context_str = req.context or f"현재 날짜 및 시간: {current_datetime}"
+            print("[비로그인 사용자]")
 
-        # GPT 프롬프트 생성 및 실행
-        gpt_full_prompt = f"사용자 요청: {req.text}\n\nContext:\n{context}"
-        print(f"[GPT 프롬프트]:\n{gpt_full_prompt}")
-        
         # ---------------------------------------------------------------
-        # 1) GPT: 마케팅 아이디어 + 프롬프트 생성
+        # 1) GPT 결과값은 프론트에서 받은 것을 그대로 사용
         # ---------------------------------------------------------------
-        print("[ADS] GPT 아이디어 생성 시작")
-        gpt_result = await generate_marketing_idea(
-            prompt_text=req.text,
-            context=context
-        )
-        idea = gpt_result.get("idea", "")
-        caption = gpt_result.get("caption", "")
-        hashtags = gpt_result.get("hashtags", [])
-        image_prompt = gpt_result.get("image_prompt", "")
-        bgm_prompt = gpt_result.get("bgm_prompt", "")
+        idea = req.idea or ""
+        caption = req.caption or ""
+        hashtags = req.hashtags or []
+        image_prompt = req.image_prompt or ""
+        bgm_prompt = req.bgm_prompt or ""
 
-        print(f"[GPT 아이디어] {idea}")
-        print(f"[이미지 프롬프트] {image_prompt}")
-        print(f"[BGM 프롬프트] {bgm_prompt}")
-        print("[ADS] GPT 아이디어 생성 완료")
+        # 최소한 image_prompt는 있어야 의미가 있음
+        if req.generate_image and not image_prompt:
+            raise HTTPException(
+                status_code=400,
+                detail="generate_image=true 인 경우 image_prompt는 필수입니다.",
+            )
 
-        # base_url (절대 url 생성용)
-        base_url = str(request.base_url).rstrip("/")
+        if req.generate_audio and not bgm_prompt:
+            raise HTTPException(
+                status_code=400,
+                detail="generate_audio=true 인 경우 bgm_prompt는 필수입니다.",
+            )
 
+        print(f"[GPT 아이디어(프론트 전달)] {idea}")
+        print(f"[이미지 프롬프트(프론트 전달)] {image_prompt}")
+        print(f"[BGM 프롬프트(프론트 전달)] {bgm_prompt}")
 
         # -------------------------
         # 2) 이미지 생성 (옵션)
@@ -126,23 +261,37 @@ async def generate_ad(
         image_path: Optional[Path] = None
 
         if req.generate_image:
-            # 1) 플레이스홀더 이미지 생성 (PNG bytes)
-            #    - 나중에 SAM + ControlNet + IP-Adapter로 바꿀 예정
-            image_bytes = generate_poster_image(
+            if not image_prompt:
+                raise HTTPException(
+                    status_code=400,
+                    detail="generate_image=true 인 경우 image_prompt는 필수입니다.",
+                )
+            if not req.product_image_b64:
+                raise HTTPException(
+                    status_code=400,
+                    detail="generate_image=true 인 경우 product_image_b64는 필수입니다.",
+                )
+
+            print("[ADS] 제품 이미지 기반 합성 포스터 생성 모드 진입")
+
+            # diffusion 파이프라인 전체 호출 (Base64 → 세그멘테이션 → 합성)
+            image_bytes = generate_poster_with_product_b64(
                 prompt=image_prompt,
-                product_image_bytes=None,  # 음성만 있는 시나리오라서 일단 None
+                product_image_b64=req.product_image_b64,
+                composition_mode=req.composition_mode,
+                control_weight=None,
+                ip_adapter_scale=None,
             )
 
-            # 2) Base64 인코딩 (프론트용)
             image_base64 = base64.b64encode(image_bytes).decode("ascii")
 
-            # 3) 파일 저장 → /media/images/xxxx.png
             image_path = save_generated_image(image_bytes, ext="png")
             image_url = f"{base_url}/media/images/{image_path.name}"
 
             print(f"[이미지 생성/저장 완료] {image_path}")
         else:
             print("[옵션] 이미지 생성 비활성화 상태")
+
 
         # -------------------------
         # 3) 오디오 생성 (옵션)
@@ -200,8 +349,8 @@ async def generate_ad(
             user_id=current_user.id if current_user else None,
             voice_text=req.text,
             weather_info=weather_info,
-            gpt_prompt=gpt_full_prompt,
-            gpt_output_text=gpt_output_text,
+            gpt_prompt=context_str,          # full 프롬프트 대신 context 요약 정도
+            gpt_output_text=gpt_output_text, # GPT 결과 요약 문자열
             diffusion_prompt=image_prompt,
             image_url=image_url,
             audio_url=audio_url,

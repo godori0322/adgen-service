@@ -215,6 +215,64 @@ class DiffusionResponse(BaseResponse):
     image_url: Optional[str] = Field(None, description="생성된 이미지 URL")
 
 
+
+# ==================== Meida Generation====================
+class AdMediaGenerateRequest(BaseModel):
+    text: str = Field(..., description="사용자가 최종적으로 요청한 문장")
+    context: Optional[str] = Field(
+        default=None,
+        description="GPT 멀티턴 결과로 정리된 전략/맥락 요약 문자열",
+    )
+
+    idea: Optional[str] = Field(
+        default=None,
+        description="GPT가 생성한 광고 아이디어 문장",
+    )
+    caption: Optional[str] = Field(
+        default=None,
+        description="SNS/포스터에 들어갈 메인 카피 문장",
+    )
+    hashtags: List[str] = Field(
+        default_factory=list,
+        description="광고 해시태그 리스트",
+    )
+
+    image_prompt: Optional[str] = Field(
+        default=None,
+        description="이미지 생성용 프롬프트 (GPT가 만든 것)",
+    )
+    bgm_prompt: Optional[str] = Field(
+        default=None,
+        description="BGM 생성용 프롬프트 (GPT가 만든 것)",
+    )
+
+    # 🔹 제품 이미지(Base64) 필수
+    product_image_b64: str = Field(
+        ...,
+        description="사용자가 업로드한 제품 이미지(Base64 문자열)",
+    )
+
+    # 🔹 합성 모드
+    composition_mode: CompositionMode = Field(
+        default=CompositionMode.balanced,
+        description="제품+배경 합성 모드 (rigid | balanced | creative)",
+    )
+
+    generate_image: bool = Field(
+        default=True,
+        description="이미지 생성 여부 플래그",
+    )
+    generate_audio: bool = Field(
+        default=False,
+        description="BGM 생성 여부 플래그",
+    )
+    generate_video: bool = Field(
+        default=False,
+        description="이미지 + 오디오 mp4 합성 여부 플래그",
+    )
+
+
+
 # ==================== Weather / History ====================
 
 class WeatherResponse(BaseResponse):
