@@ -13,7 +13,9 @@ export default function VoiceHomePage() {
     onImageUpload,
     onSelectMode,
     onSelectBgmOption,
+    onInsertCaption,
     retryProcess,
+    isUiBlocking,
   } = useVoiceChat();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -21,7 +23,13 @@ export default function VoiceHomePage() {
     <div className="relative pb-32">
       <PageTitle variant="section">🎙️ 음성 기반 마케팅 생성</PageTitle>
       {/* 채팅 bubble 영역 */}
-      <ChatBubbleList messages={messages} onSelectMode={onSelectMode} onSelectBgmOption ={onSelectBgmOption} retryProcess={retryProcess} />
+      <ChatBubbleList
+        messages={messages}
+        onSelectMode={onSelectMode}
+        onSelectBgmOption={onSelectBgmOption}
+        retryProcess={retryProcess}
+        onInsertCaption={onInsertCaption}
+      />
       <div ref={chatEndRef} />
       {/* 🔥 이미지 업로드 UI */}
       {needImage && (
@@ -43,7 +51,7 @@ export default function VoiceHomePage() {
       )}
       {/* 🔥 이미지 필요할 땐 음성 녹음 버튼 숨김 */}
       <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40">
-        {!needImage && <VoiceRecorder onAudioSend={onAudioSend} disabled={isWorking} />}
+        {!isUiBlocking && <VoiceRecorder onAudioSend={onAudioSend} disabled={isWorking} />}
       </div>
     </div>
   );

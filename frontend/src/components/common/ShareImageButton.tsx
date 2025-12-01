@@ -1,15 +1,9 @@
 import { useState } from "react";
 import AlertModal from "./AlertModal";
 
-interface GptParsed {
-  idea: string;
-  caption: string;
-  hashtags?: string[];
-}
 
 interface ShareImageButtonProps {
   imageUrl: string;
-  parsed?: GptParsed; // GPT 결과 전달받기
 }
 
 export default function ShareImageButton({ imageUrl }: ShareImageButtonProps) {

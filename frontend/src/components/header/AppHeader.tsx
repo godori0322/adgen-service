@@ -10,6 +10,7 @@ export default function AppHeader() {
   const location = useLocation();
   const { isLogin, logout } = useAuth();
   const { resetMessages } = useChat();
+  // const { resetChatFlow } = useVoiceChat();
   const [showConfirm, setShowConfirm] = useState(false);
 
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -22,15 +23,21 @@ export default function AppHeader() {
   };
   const handleLogout = () => {
     resetMessages();
+    // resetChatFlow();
     logout();
   };
 
   const handleNewChat = () => setShowConfirm(true);
   const confirmNewChat = () => {
-    resetMessages();
-    navigate("/");
     setShowConfirm(false);
+    window.location.reload();
+
+    setTimeout(() => {
+      resetMessages();
+      // resetChatFlow();
+    }, 0);
   };
+
   const cancelNewChat = () => setShowConfirm(false);
 
   return (

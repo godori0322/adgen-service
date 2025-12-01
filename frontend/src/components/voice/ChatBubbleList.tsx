@@ -1,8 +1,10 @@
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ChatMessage } from "../../hooks/useVoiceChat";
+import { useChat, type ChatMessage } from "../../context/ChatContext";
 import ShareImageButton from "../common/ShareImageButton";
 import BgmSelectBubble from "./BgmSelectBubble";
+import CaptionEditor from "./CaptionEditor";
 import type { ImageMode } from "./ImageModeSelectorBubble";
 import ImageModeSelectorBubble from "./ImageModeSelectorBubble";
 
@@ -11,18 +13,23 @@ export default function ChatBubbleList({
   onSelectMode,
   onSelectBgmOption,
   retryProcess,
-}: {
+  onInsertCaption,
+}: 
+{
   messages: ChatMessage[];
   onSelectMode: (mode: ImageMode) => void;
   onSelectBgmOption: (opt: "video" | "image" | "separate") => void;
-  retryProcess: (type: "image" | "video" | "audio") => void;
+  retryProcess: () => void;
+  onInsertCaption: (choice: boolean, tempId?: number) => void;
 }) {
+  const [addCaption, setAddCaption] = useState(false);
   const downloadImage = (base64Url: string, filename: string) => {
     const link = document.createElement("a");
     link.href = base64Url;
     link.download = filename;
     link.click();
   };
+  const { addMessage, updateTempMessage } = useChat();
 
   return (
     <div className="mt-4 space-y-3">
@@ -36,18 +43,18 @@ export default function ChatBubbleList({
                 ? "ml-auto bg-blue-500 text-white rounded-br-none"
                 : "mr-auto bg-gray-200 text-gray-900 rounded-bl-none"
             }
-            ${msg.retryType ? "border-red-300 bg-red-50 rounded-xl text-red-700 text-sm" : ""}
+            ${msg.fail ? "border-red-300 bg-red-50 rounded-xl text-red-700 text-sm" : ""}
           `}
         >
           {/* 실패 시 재시도 UI */}
-          {msg.retryType ? (
+          {msg.fail ? (
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-lg">❌</span>
                 <span>{msg.content}</span>
               </div>
               <button
-                onClick={() => retryProcess(msg.retryType!)}
+                onClick={() => retryProcess()}
                 className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold 
                  py-2 rounded-lg transition-all duration-200 shadow 
                  flex justify-center items-center gap-1"
@@ -75,7 +82,7 @@ export default function ChatBubbleList({
                       <ShareImageButton imageUrl={msg.img} />
                       <button
                         onClick={() => downloadImage(msg.img!, `adgen-image-${Date.now()}.png`)}
-                        className="bg-gray-600 hover:bg-gray-700 text-white rounded-md px-3 py-1 text-xs shadow mt-2"
+                        className="bg-gray-600 hover:bg-gray-700 text-white rounded-md px-3 py-2 text-sm font-medium shadow mt-2"
                       >
                         ⬇️ 저장
                       </button>
@@ -98,6 +105,48 @@ export default function ChatBubbleList({
                     <source src={msg.audio} type="audio/mpeg" />
                   </audio>
                 </div>
+              )}
+              {/* 캡션 삽입 여부 */}
+              {msg.captionSelect && (
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => {
+                      setAddCaption(true);
+                      addMessage({ content: "이미지에 문구를 넣을게요 ✍️", role: "user" });
+                    }}
+                    className="bg-blue-500 text-white px-3 py-1 rounded-lg text-xs"
+                  >
+                    네! 넣을게요 ✍️
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      addMessage({
+                        content: "아니요 괜찮아요 👌",
+                        role: "user",
+                      });
+
+                      onInsertCaption(false);
+                      setAddCaption(false);
+                    }}
+                    className="bg-gray-300 text-gray-800 px-3 py-1 rounded-lg text-xs"
+                  >
+                    아니요 괜찮아요 👌
+                  </button>
+                </div>
+              )}
+              {msg.captionSelect && addCaption && (
+                <CaptionEditor
+                  textData={msg.textData || ""}
+                  onComplete={(finalImg) => {
+                    updateTempMessage(msg.tempId!, {
+                      captionSelect: false,
+                      content: "이미지에 문구 삽입이 완료되었습니다! 🎉",
+                      img: finalImg,
+                    });
+                    setAddCaption(false);
+                  }}
+                />
               )}
 
               {/* 이미지 모드 선택 */}
