@@ -19,6 +19,7 @@ export interface ChatMessage {
   caption?: string;
   fail?: boolean;
   captionSelect?: boolean;
+  captionEditor?: boolean;
 }
 
 interface ChatContextValue {

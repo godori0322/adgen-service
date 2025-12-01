@@ -15,6 +15,7 @@ export default function VoiceHomePage() {
     onSelectBgmOption,
     onInsertCaption,
     retryProcess,
+    isCaptionEditing,
     isUiBlocking,
   } = useVoiceChat();
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -51,7 +52,7 @@ export default function VoiceHomePage() {
       )}
       {/* 🔥 이미지 필요할 땐 음성 녹음 버튼 숨김 */}
       <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40">
-        {!isUiBlocking && <VoiceRecorder onAudioSend={onAudioSend} disabled={isWorking} />}
+        {!isUiBlocking && !isCaptionEditing && <VoiceRecorder onAudioSend={onAudioSend} disabled={isWorking} />}
       </div>
     </div>
   );

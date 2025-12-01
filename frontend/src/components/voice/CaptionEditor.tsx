@@ -114,7 +114,6 @@ export default function CaptionEditor({ textData, onComplete }: Props) {
         <button
           onClick={async () => {
             const res = await requestApply();
-            console.log("캡션 적용 결과:", res);
             if (!res.success) {
               setAlert("문구 삽입에 실패했어요! 다시 시도해주세요 😥");
               return;

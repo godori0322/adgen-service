@@ -50,18 +50,27 @@ export async function generateSyntheSizeDiffusionRequest(
 
 // Diffusion - 자동 합성 + BGM 옵션
 export async function adsGenerateRequest(
-  prompt: string,
-  img: File,
+  content: any,
+  img: string,
   imageMode: ImageMode,
+  mode: "image" | "video" | "separate",
+  imagePrompt?: string,
   bgmPrompt?: string
 ) {
-  const form = new FormData();
-  form.append("prompt", prompt);
-  form.append("file", img);
-  form.append("imageMode", imageMode);
-  if (bgmPrompt) form.append("bgmPrompt", bgmPrompt);
+  const body = {
+    idea: content.idea,
+    caption: content.caption,
+    hashtags: content.hashtags,
+    product_image_b64: img,
+    composition_mode: imageMode,
+    image_prompt: imagePrompt,
+    bgm_prompt: bgmPrompt,
+    generate_image: true,
+    generate_audio: mode === "separate" || mode === "video",
+    generate_video: mode === "video",
+  };
 
-  return httpPostFormBlob("/diffusion/synthesize/auto/upload", form);
+  return await httpPostJson("/ads/generate", body);
 }
 
 // AI에게 이미지 세션 업로드
@@ -90,7 +99,6 @@ export async function insertCaptionRequest(
   textColor: { r: number; g: number; b: number },
   imgFile: File
 ) {
-  console.log("Inserting caption with:", { caption, font_mode, mode, width, height, textColor, imgFile });
   const form = new FormData();
   form.append("text", caption);
   form.append("font_mode", font_mode);
@@ -102,9 +110,16 @@ export async function insertCaptionRequest(
   form.append("color_b", textColor.b.toString());
   form.append("image_file", imgFile);
 
-  return httpPostFormBlob("/text/apply", form);
+  return httpPostForm("/text/apply", form);
 }
-export async function insertCaptionPreviewRequest(caption: string, font_mode: string, mode: string, width: number, height: number, textColor: {r: number, g: number, b: number}) {
+export async function insertCaptionPreviewRequest(
+  caption: string,
+  font_mode: string,
+  mode: string,
+  width: number,
+  height: number,
+  textColor: { r: number; g: number; b: number }
+) {
   const form = new FormData();
   form.append("text", caption);
   form.append("font_mode", font_mode);
