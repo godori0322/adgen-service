@@ -6,11 +6,9 @@ import { useChat } from "../../context/ChatContext";
 import ConfirmModal from "../common/ConfirmModal";
 
 export default function AppHeader() {
-  // const navigate = useNavigate();
   const location = useLocation();
   const { isLogin, logout } = useAuth();
   const { resetMessages } = useChat();
-  // const { resetChatFlow } = useVoiceChat();
   const [showConfirm, setShowConfirm] = useState(false);
 
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -23,7 +21,6 @@ export default function AppHeader() {
   };
   const handleLogout = () => {
     resetMessages();
-    // resetChatFlow();
     logout();
   };
 
@@ -31,11 +28,7 @@ export default function AppHeader() {
   const confirmNewChat = () => {
     setShowConfirm(false);
     window.location.reload();
-
-    setTimeout(() => {
-      resetMessages();
-      // resetChatFlow();
-    }, 0);
+    resetMessages();
   };
 
   const cancelNewChat = () => setShowConfirm(false);
@@ -56,12 +49,14 @@ export default function AppHeader() {
             {/* <Link to="/history" className="hover:text-blue-600">
               히스토리
             </Link> */}
-            <button
-              onClick={handleNewChat}
-              className="text-blue-600 hover:text-blue-700 font-medium"
-            >
-              🆕 새 대화
-            </button>
+            {location.pathname === "/" && (
+              <button
+                onClick={handleNewChat}
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                🆕 새 대화
+              </button>
+            )}
             <Link to="/mypage" className="hover:text-blue-600">
               마이페이지
             </Link>

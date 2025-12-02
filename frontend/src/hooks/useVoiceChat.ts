@@ -8,17 +8,28 @@ import { useChat } from "../context/ChatContext";
 import { formatChatResponse } from "../utils/chatFormatter";
 import { blobToFile, fileToBase64 } from "../utils/files";
 import { useDotsAnimation } from "./useDotsAnimation";
+import { useImageFlow } from "./useImageFlow";
 import { useWhisper } from "./useWhisper";
 
 export function useVoiceChat() {
   const { isLogin } = useAuth();
-  const [isWorking, setIsWorking] = useState(false);
   const { messages, addMessage, updateTempMessage } = useChat();
+
+  const {
+    requestPreview,
+    uploadedImageFile,
+    isPreviewMode,
+    isPreviewLoading,
+    cancelPreview,
+    setPreviewMode,
+  } = useImageFlow();
+
+  const [isWorking, setIsWorking] = useState(false);
   const { startDots, stopDots } = useDotsAnimation();
   const [needImage, setNeedImage] = useState(false);
-  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
   const [imageMode, setImageMode] = useState<ImageMode | null>(null);
   const [isCaptionEditing, setIsCaptionEditing] = useState(false);
+  const [hasShownImageGuide, setHasShownImageGuide] = useState(false);
 
   const [needBgmChoice, setNeedBgmChoice] = useState(false);
   const pendingQuestionRef = useRef<string | null>(null);
@@ -33,9 +44,11 @@ export function useVoiceChat() {
   const updateSessionKey = (key: string) => {
     sessionKeyRef.current = key;
   };
+
   useEffect(() => {
     resetChatFlow();
   }, []);
+
   // 이미지 or 동영상 생성
   const processImageOrVideo = async () => {
     const mode = userSelectBgmRef.current;
@@ -52,6 +65,7 @@ export function useVoiceChat() {
     addMessage({
       role: "assistant",
       tempId: msgId,
+      loading: true,
       content:
         mode === "video"
           ? "🎬 동영상 생성 중..."
@@ -70,11 +84,14 @@ export function useVoiceChat() {
         imagePromptRef.current,
         bgmPromptRef.current
       );
+
       const baseUrl = import.meta.env.VITE_MINIO_ENDPOINT ?? "";
       const imageUrl = result.image_url ? baseUrl + result.image_url : null;
       const videoUrl = result.video_url ? baseUrl + result.video_url : null;
       const audioUrl = result.audio_url ? baseUrl + result.audio_url : null;
+
       updateTempMessage(msgId, {
+        loading: false,
         content:
           mode === "video"
             ? "🎬 동영상 생성 완료!"
@@ -93,13 +110,13 @@ export function useVoiceChat() {
           role: "assistant",
           content: `대화가 종료되었습니다 😊\n원하시면 음성으로 새로운 광고를 시작해주세요!`,
         });
-
         resetChatFlow();
         return;
       }
 
       const tempId = Date.now();
       const imgObj = new Image();
+      if (!imageUrl) return;
       imgObj.src = imageUrl;
 
       imgObj.onerror = () => {
@@ -109,11 +126,13 @@ export function useVoiceChat() {
           fail: true,
         });
       };
+
       imgObj.onload = async () => {
         if (contentRef.current) {
           const response = await fetch(imageUrl);
           const blob = await response.blob();
           const resultFile = blobToFile(blob, "generated_image.png");
+
           addMessage({
             tempId,
             role: "assistant",
@@ -130,6 +149,7 @@ export function useVoiceChat() {
         }
       };
     } catch (err) {
+      console.error(err);
       updateTempMessage(msgId, {
         content:
           mode === "video"
@@ -137,8 +157,6 @@ export function useVoiceChat() {
             : "이미지 생성 실패! 다시 시도해주세요.",
         fail: true,
       });
-    } finally {
-      setUploadedImageFile(null); // 다음 업로드 대기
     }
   };
 
@@ -169,7 +187,17 @@ export function useVoiceChat() {
     if (isResetRef.current) {
       isResetRef.current = false;
     }
+    if (isPreviewMode) {
+      // 누끼 확인 중에는 음성 입력 막기
+      addMessage({
+        role: "assistant",
+        content: "먼저 현재 이미지 사용 여부를 선택해 주세요 😊",
+      });
+      return;
+    }
+
     setIsWorking(true);
+
     if (audioBlob.size < 10000) {
       addMessage({
         role: "assistant",
@@ -270,6 +298,7 @@ export function useVoiceChat() {
         await processImageOrVideo();
       }
     } catch (err) {
+      console.error(err);
       addMessage({
         role: "assistant",
         content: "❌ 오류가 발생했습니다. 다시 시도해주세요!",
@@ -281,30 +310,21 @@ export function useVoiceChat() {
   };
 
   const onImageUpload = async (file: File) => {
-    const key = sessionKeyRef.current;
-    if (!key) return;
-
-    const base64Img = await fileToBase64(file);
-
-    setUploadedImageFile(file);
+    // 백엔드 uploadImage 호출 X, 우선 누끼 preview만
     setNeedImage(false);
-
-    try {
-      await uploadImage(key, file);
-    } catch (err) {
-      console.error("이미지 업로드 실패:", err);
-    }
-
-    addMessage({ role: "user", content: "", img: base64Img });
-
-    addMessage({
-      role: "assistant",
-      content: "어떤 방식으로 이미지를 합성할까요?",
-      modeSelect: true,
-    });
+    await requestPreview(file);
   };
 
   const onSelectMode = (mode: ImageMode) => {
+    if (isPreviewMode) {
+      // 아직 이미지 사용 여부 안 정했는데 모드부터 선택하는 경우 방지
+      addMessage({
+        role: "assistant",
+        content: "이미지 사용 여부를 먼저 결정해 주세요 😊",
+      });
+      return;
+    }
+
     setImageMode(mode);
 
     addMessage({
@@ -334,7 +354,10 @@ export function useVoiceChat() {
           ? "📸 이미지만 생성할게요!"
           : "🎨 이미지 + 🎵 음악을 따로 생성할게요!",
     });
-
+    addMessage({
+      role: "assistant",
+      content: IMAGE_GUIDE_MESSAGE,
+    });
     setNeedImage(true);
   };
 
@@ -364,12 +387,16 @@ export function useVoiceChat() {
 
     resetChatFlow();
   };
+
   const lastMsg = messages[messages.length - 1];
 
   const isUiBlocking =
     isWorking ||
+    isPreviewMode || // 🔥 preview 중엔 입력 막기
     needImage ||
     isCaptionEditing ||
+    isPreviewMode ||
+    isPreviewLoading ||
     (lastMsg?.modeSelect && userSelectBgmRef.current == null) ||
     (lastMsg?.bgmSelect && imageMode == null);
 
@@ -378,9 +405,10 @@ export function useVoiceChat() {
 
     setNeedImage(false);
     setNeedBgmChoice(false);
-    setUploadedImageFile(null);
     setImageMode(null);
     setIsWorking(false);
+
+    setPreviewMode(false);
 
     sessionKeyRef.current = null;
     pendingQuestionRef.current = null;
@@ -389,11 +417,78 @@ export function useVoiceChat() {
     bgmPromptRef.current = null;
     contentRef.current = null;
   };
+
+  // 🔥 Preview 승인 → 다음 단계 이동
+  const onConfirmPreview = async (tempId: number) => {
+    if (!sessionKeyRef.current || !uploadedImageFile) {
+      console.error("업로드할 이미지 또는 세션 키가 없습니다.");
+      return;
+    }
+    setPreviewMode(false);
+
+    updateTempMessage(tempId, {
+      previewConfirmed: true,
+      previewRejected: false,
+    });
+
+    addMessage({ role: "user", content: "이 이미지 사용할게요!" });
+
+    // 업로드 로딩 메시지 추가
+    const loadingId = Date.now();
+    addMessage({
+      role: "assistant",
+      tempId: loadingId,
+      loading: true,
+      content: "이미지를 업로드하고 있어요 📤☁️",
+    });
+
+    try {
+      await uploadImage(sessionKeyRef.current, uploadedImageFile);
+
+      // 로딩 메시지 종료
+      updateTempMessage(loadingId, {
+        loading: false,
+        content: "업로드 완료! 🎉",
+      });
+
+      // 다음 단계 진행
+      addMessage({
+        role: "assistant",
+        tempId: Date.now() + 1,
+        content: "좋아요! 어떤 방식의 광고를 원하시나요? 😄",
+        modeSelect: true,
+      });
+    } catch (err) {
+      console.error("이미지 업로드 실패:", err);
+      updateTempMessage(loadingId, {
+        loading: false,
+        fail: true,
+        content: "업로드 실패! 😢 다시 시도해 주세요",
+      });
+    }
+  };
+
+  // 🔁 Preview 취소 → 다시 업로드 요청
+  const onRetryPreview = () => {
+    cancelPreview();
+    const last = messages[messages.length - 1];
+    if (last?.tempId) {
+      updateTempMessage(last.tempId, {
+        previewRejected: true,
+        previewConfirmed: false,
+      });
+    }
+
+    setNeedImage(true);
+  };
+
   return {
     messages,
     needImage,
     needBgmChoice,
     isWorking,
+    isPreviewMode,
+    cancelPreview,
     onAudioSend,
     onImageUpload,
     onSelectMode,
@@ -403,5 +498,9 @@ export function useVoiceChat() {
     onInsertCaption,
     isCaptionEditing,
     isUiBlocking,
+    uploadedImageFile,
+    onConfirmPreview,
+    onRetryPreview,
+    setIsCaptionEditing,
   };
 }

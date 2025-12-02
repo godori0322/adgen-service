@@ -20,6 +20,10 @@ export interface ChatMessage {
   fail?: boolean;
   captionSelect?: boolean;
   captionEditor?: boolean;
+  previewSelect?: boolean;
+  previewConfirmed?: boolean;
+  previewRejected?: boolean;
+  loading?: boolean;
 }
 
 interface ChatContextValue {
@@ -48,7 +52,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   // 로그인 중에만 저장
   useEffect(() => {
     if (isLogin) {
-      sessionStorage.setItem("chatMessages", JSON.stringify(messages));
+      const lightMessages = messages.map(({ img, video, audio, textData, ...rest }) => rest);
+      sessionStorage.setItem("chatMessages", JSON.stringify(lightMessages));
     }
   }, [messages, isLogin]);
 
