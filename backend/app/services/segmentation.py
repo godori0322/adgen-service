@@ -11,6 +11,8 @@ import torch
 import numpy as np
 import cv2
 from PIL import Image
+from io import BytesIO
+import base64
 
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 
@@ -99,6 +101,10 @@ class ProductSegmentation:
         if len(masks) == 0:
             raise ValueError("SAM이 마스크를 감지하지 못했습니다.")
 
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+
         # 종합 점수 기준으로 가장 제품일 확률이 높은 마스크 선정
         best_mask = select_best_mask(img_rgb, masks)
 
@@ -158,18 +164,26 @@ def mask_needs_invert(mask: np.ndarray) -> bool:
     마스크 중앙 부분이 대부분 0이면 (배경으로 판단되면) 반전 필요하다고 판단.
     """
     if mask.ndim == 3:
-        mask = mask.squeeze()
-    if mask.ndim != 2:
-        raise ValueError(f"Invalid mask shape: {mask.shape}")
-    
+        mask = mask[..., 0]
+
     h, w = mask.shape
+
+    # 중앙 40% 영역 체크
     y1, y2 = int(h * 0.3), int(h * 0.7)
     x1, x2 = int(w * 0.3), int(w * 0.7)
 
-    center = mask[y1:y2, x1:x2]
-    ratio = np.mean(center)  # 0~1
+    center_ratio = np.mean(mask[y1:y2, x1:x2])
 
-    return ratio < 0.3  # 중앙부가 비어 있다 → 반전 필요
+    # 전체 픽셀 중 마스크 비율
+    fg_ratio = np.mean(mask)
+
+    # 조건 1: 중앙이 비어 있음 (기존 로직)
+    cond1 = center_ratio < 0.3
+
+    # 조건 2: 거의 전체가 마스크 (배경 전체 감지한 경우)
+    cond2 = fg_ratio > 0.85
+
+    return cond1 or cond2
 
 
 # =============================================================
@@ -261,28 +275,116 @@ def edge_complex_score(mask):
 # =============================================================
 def select_best_mask(img_rgb, masks):
     h, w, _ = img_rgb.shape
-    best_score = -1
+    best_score = -1e9
     best_mask = None
 
     for m in masks:
-        mask = m["segmentation"].astype(np.uint8)
-        mask = np.squeeze(mask)
+        mask = m["segmentation"]
+        if mask.ndim == 3:
+            mask = mask[..., 0]
+        mask = mask.astype(np.uint8)
 
-        # 너무 작은 마스크는 무시
         area = m["area"]
-        if area < (h * w * 0.02):
+        area_ratio = area / (h * w)
+
+        # 너무 작거나 너무 큰 영역(배경일 확률 높음) 제거
+        if area_ratio < 0.01 or area_ratio > 0.9:
             continue
 
+        # 1) 중앙 정렬 점수
         center_score = mask_center_score(mask)
-        color_var_score = color_variance_score(img_rgb, mask)
-        edge_score = edge_complex_score(mask)
-        # 마스크 영역 점수도 반영(하지만 배경 마스크 방지를 위해 적은 비율로)
-        area_score = min(area / (h * w), 1.0)
 
-        total_score = (0.4 * center_score) + (0.35 * edge_score) + (0.15 * color_var_score) + (0.1 * area_score)
+        # 2) 색상 다양성
+        color_var_score = color_variance_score(img_rgb, mask)
+
+        # 3) 경계 복잡도
+        edge_score = edge_complex_score(mask)
+
+        # 4) 경계에 닿아 있는 마스크 패널티
+        ys, xs = np.where(mask > 0)
+        if len(xs) > 0:
+            border_touch = (
+                np.mean(xs < w * 0.05) +
+                np.mean(xs > w * 0.95) +
+                np.mean(ys < h * 0.05) +
+                np.mean(ys > h * 0.95)
+            )
+        else:
+            border_touch = 4
+
+        border_penalty = min(border_touch, 1.0)
+
+        # 최종 스코어
+        total_score = (
+            0.45 * center_score +
+            0.30 * edge_score +
+            0.05 * color_var_score +
+            0.10 * area_ratio -
+            0.20 * border_penalty
+        )
 
         if total_score > best_score:
             best_score = total_score
             best_mask = mask
 
+    if best_mask is None:
+        # fallback: 가장 큰 마스크라도 사용
+        best_mask = max(masks, key=lambda x: x["area"])["segmentation"]
+
     return best_mask
+
+# =============================================================
+# 5. 누끼 미리 보여주는 함수
+# =============================================================
+def preview_segmentation(original_image: Image.Image) -> dict:
+    """
+    원본 이미지를 입력받아:
+    - mask_array
+    - cutout (투명 배경)
+    - overlay (원본 위에 마스크 반투명 오버레이)
+    를 생성해서 Base64로 반환
+    """
+    model = get_segmentation_singleton()
+
+    mask_array, cutout_image = model.remove_background(original_image)
+    mask_image = _mask_array_to_pil(mask_array)
+
+    # 1) cutout PNG (RGBA)
+    cutout_rgba = cutout_image.convert("RGBA")
+    buf_cutout = BytesIO()
+    cutout_rgba.save(buf_cutout, format="PNG")
+    cutout_b64 = base64.b64encode(buf_cutout.getvalue()).decode("utf-8")
+
+    # 2) overlay: 원본 위에 마스크를 반투명 색으로 칠하기
+    overlay = original_image.convert("RGBA")
+    overlay_mask = mask_image.resize(original_image.size).convert("L")
+
+    color_layer = Image.new("RGBA", overlay.size, (0, 255, 0, 120))  # 연한 초록 계열
+    overlay = Image.composite(color_layer, overlay, overlay_mask)
+
+    buf_overlay = BytesIO()
+    overlay.save(buf_overlay, format="PNG")
+    overlay_b64 = base64.b64encode(buf_overlay.getvalue()).decode("utf-8")
+
+    # 3) 품질 heuristic
+    H, W = mask_array.shape
+    area_ratio = mask_array.sum() / (H * W)
+    # 너무 작거나 너무 크면 warning
+    if area_ratio < 0.02:
+        quality = "too_small"
+    elif area_ratio > 0.85:
+        quality = "too_big"
+    else:
+        quality = "ok"
+
+    return {
+        "cutout_b64": cutout_b64,
+        "overlay_b64": overlay_b64,
+        "area_ratio": area_ratio,
+        "quality": quality,
+    }
+
+def _mask_array_to_pil(mask_array: np.ndarray) -> Image.Image:
+    """SAM 마스크(ndarray)를 흑백(L) 모드 PIL 이미지로 변환."""
+    scaled = np.clip(mask_array * 255.0, 0, 255).astype("uint8")
+    return Image.fromarray(scaled, mode="L")
