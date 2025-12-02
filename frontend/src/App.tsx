@@ -9,6 +9,7 @@ import VoiceHomePage from "./pages/home/VoiceHome";
 import MyPage from "./pages/mypage/MyPage";
 import NotFoundPage from "./pages/NotFound";
 import PrivateRoute from "./router/PrivateRoute";
+import HistoryPage from "./pages/history/History";
 
 function App() {
   return (
@@ -32,6 +33,14 @@ function App() {
             element={
               <PrivateRoute>
                 <MyPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <PrivateRoute>
+                <HistoryPage />
               </PrivateRoute>
             }
           />
