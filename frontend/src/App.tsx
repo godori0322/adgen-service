@@ -1,5 +1,4 @@
 import { Route, Routes } from "react-router-dom";
-import InstallPwaButton from "./components/common/InstallPwaButton";
 import AuthLayout from "./components/layout/AuthLayout";
 import MainLayout from "./components/layout/MainLayout";
 import FindAccountPage from "./pages/auth/FindAccount";
@@ -40,7 +39,6 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
-      <InstallPwaButton />
     </>
   );
 }

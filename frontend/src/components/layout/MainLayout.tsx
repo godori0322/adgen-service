@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import AppHeader from "../header/AppHeader";
-import FloatingButton from "../common/FloatingButton";
+import FloatingHubButton from "../common/FloatingHubButton";
 
 export default function MainLayout() {
   return (
@@ -12,7 +12,7 @@ export default function MainLayout() {
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-6">
         <Outlet />
       </main>
-      <FloatingButton />
+      <FloatingHubButton />
     </div>
   );
 }
