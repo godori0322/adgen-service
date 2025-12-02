@@ -3,8 +3,6 @@
 
 # .env 로드 (SAM_MODEL_PATH 사용)
 from dotenv import load_dotenv
-from networkx import betweenness_centrality_subset
-from transformers import CTRLPreTrainedModel
 load_dotenv()
 
 import os
@@ -15,6 +13,8 @@ import cv2
 from PIL import Image
 
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
+
+_segmentation_singleton = None
 
 class ProductSegmentation:
     def __init__(
@@ -41,11 +41,11 @@ class ProductSegmentation:
     # 1. SAM 모델 로드 (Lazy Load)
     # =========================================================
     def _ensure_models_loaded(self):
-        if self.sam_model is not None and self.mask_gen is not None:
+        if self.sam_model is not None:
             return
 
         with self._load_lock:
-            if self.sam_model is not None and self.mask_gen is not None:
+            if self.sam_model is not None:
                 return
 
             sam_ckpt = os.getenv("SAM_MODEL_PATH")
@@ -56,7 +56,7 @@ class ProductSegmentation:
 
             # SAM 모델 로드
             sam_model = sam_model_registry[self.sam_model_type](checkpoint=sam_ckpt)
-            sam_model.to(self.device)
+            sam_model.to("cuda")
             sam_model.eval()
 
             # Predictor (원하면 point/box prompt 용으로 사용 가능)
@@ -92,9 +92,6 @@ class ProductSegmentation:
         """
         self._ensure_models_loaded()
 
-        if torch.cuda.is_available():
-            self.sam_model.to("cuda")
-
         img_rgb = np.array(image.convert("RGB"))
 
         # SAM의 AutomaticMaskGenerator로 마스크 후보 생성
@@ -128,26 +125,6 @@ class ProductSegmentation:
         rgba_cutout = np.dstack([cleaned, alpha])
         rgba_final = Image.fromarray(rgba_cutout)
 
-        # GPU 메모리 해제
-        if torch.cuda.is_available():
-            self.sam_model.to("cpu")
-
-            try:
-                self.sam_predictor.reset_image()
-            except:
-                pass
-
-            if hasattr(self.mask_gen, "predictor"):
-                self.mask_gen.predictor = None
-
-            del self.mask_gen
-            self.mask_gen = None
-
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
-            
-            print("[Segmentation] SAM moved back to CPU after segmentation.")
-
         return refined_mask, rgba_final
 
     # =========================================================
@@ -163,6 +140,15 @@ class ProductSegmentation:
         rgba = np.dstack([img_np, alpha])
         return Image.fromarray(rgba)
 
+# -------------------------------------------------------------
+# Singleton instance (서버 실행 시 한 번만 실행, 동일 인스턴스 사용)
+# -------------------------------------------------------------
+def get_segmentation_singleton():
+    global _segmentation_singleton
+    if _segmentation_singleton is None:
+        _segmentation_singleton = ProductSegmentation()
+        _segmentation_singleton._ensure_models_loaded()
+    return _segmentation_singleton
 
 # =============================================================
 # 4. inversion 체크

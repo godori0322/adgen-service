@@ -2,6 +2,10 @@
 
 # 캐시파일 /home/shared/models 하위로 설정
 import os
+# cold start 방지 위해 서버 실행 시 SAM, Diffusion 모델 로드
+from backend.app.services.segmentation import get_segmentation_singleton
+from backend.app.services.diffusion_service import _load_pipeline
+import asyncio
 # Hugging Face / Diffusers / Transformers 캐시를 공용 디렉토리로 지정
 CACHE_DIR = "/home/shared/models"
 for key in [
@@ -36,6 +40,27 @@ async def startup_event():
             print(f"📦 Bucket created: {bucket}")
         else:
             print(f"📦 Bucket exists: {bucket}")
+
+    # -----------------------------
+    # SAM + Diffusion Preload 추가
+    # -----------------------------
+    print("🚀 [Startup] Preloading SAM + Diffusion models...")
+
+    # SAM 모델 미리 로드 (GPU 상주)
+    try:
+        await asyncio.to_thread(lambda: get_segmentation_singleton())
+        print("🧩 [Startup] SAM model loaded.")
+    except Exception as e:
+        print(f"❌ [Startup] SAM preload failed: {e}")
+
+    # Diffusion 파이프라인 미리 로드
+    try:
+        await asyncio.to_thread(_load_pipeline)
+        print("🎨 [Startup] Diffusion pipeline loaded.")
+    except Exception as e:
+        print(f"❌ [Startup] Diffusion preload failed: {e}")
+
+    print("✨ [Startup] All models ready.")
 
 # media 디렉토리 정적 서빙
 app.mount(
