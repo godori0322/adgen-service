@@ -1,7 +1,6 @@
 // src/hooks/useImageFlow.ts
 import { useState } from "react";
 import { segmentationPreviewRequest } from "../api/generate";
-import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
 import { useChat } from "../context/ChatContext";
 import { fileToBase64 } from "../utils/files";
 

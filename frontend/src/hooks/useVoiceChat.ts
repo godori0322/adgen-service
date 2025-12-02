@@ -29,7 +29,6 @@ export function useVoiceChat() {
   const [needImage, setNeedImage] = useState(false);
   const [imageMode, setImageMode] = useState<ImageMode | null>(null);
   const [isCaptionEditing, setIsCaptionEditing] = useState(false);
-  const [hasShownImageGuide, setHasShownImageGuide] = useState(false);
 
   const [needBgmChoice, setNeedBgmChoice] = useState(false);
   const pendingQuestionRef = useRef<string | null>(null);

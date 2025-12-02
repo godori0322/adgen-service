@@ -14,7 +14,7 @@ export default function FloatingButton() {
         bg-blue-600 text-white text-sm font-medium
         shadow-lg
         hover:bg-blue-700 hover:shadow-xl
-        transition-transform transition-shadow duration-200
+        transition-transform duration-200
         hover:-translate-y-0.5
       "
     >
