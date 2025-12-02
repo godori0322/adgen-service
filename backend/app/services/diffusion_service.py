@@ -25,7 +25,7 @@ from io import BytesIO
 from typing import Optional
 import random
 
-from backend.app.services.segmentation import ProductSegmentation
+from backend.app.services.segmentation import get_segmentation_singleton
 from backend.app.core.diffusion_presets import resolve_preset
 from backend.app.core.schemas import CompositionMode
 
@@ -60,24 +60,6 @@ _ip_adapter_loaded = False
 
 # 포스터(txt2img)용 베이스 sd 1.5 파이프라인 추가
 _poster_pipeline = None
-# 전역 세그멘테이션 모델 핸들러 추가
-_segmentation_model : Optional[ProductSegmentation] = None
-
-
-# -----------------------------------------------------------------------------
-# 포스터 생성용 세그멘테이션 모델 핸들러                                                          
-# -----------------------------------------------------------------------------
-def _get_segmentation_model() -> ProductSegmentation:
-    global _segmentation_model
-    if _segmentation_model is None:
-        try:
-            _segmentation_model = ProductSegmentation()
-            print("[Segmentation] MobileSAM 로드 완료.")
-        except Exception as exc:
-            print(f"[Segmentation][ERROR] 모델 로드 실패: {exc}")
-            raise RuntimeError("Segmentation model load failed.")
-    return _segmentation_model
-
 
 def _mask_array_to_pil(mask_array: np.ndarray) -> Image.Image:
     """SAM 마스크(ndarray)를 흑백(L) 모드 PIL 이미지로 변환."""
@@ -496,11 +478,11 @@ def run_auto_synthesis(
     ip_adapter_scale: float | None = None,
 ) -> Image.Image:
     """
-    1) 세그멘테이션 (MobileSAM + SAM)
+    1) 세그멘테이션 (SAM)
     2) CompositionMode 프리셋 + (옵션) override 해석
     3) synthesize_image 호출
     """
-    model = _get_segmentation_model()
+    model = get_segmentation_singleton()
 
     # 1) segmentation: 전체 이미지 기준으로 누끼 추출
     mask_array, cutout_image = model.remove_background(original_image)

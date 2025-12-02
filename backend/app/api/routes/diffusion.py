@@ -15,9 +15,10 @@ from backend.app.services.diffusion_service import (
     synthesize_image,
     generate_poster_image,
     run_auto_synthesis,
-    generate_poster_with_product_b64
+    generate_poster_with_product_b64,
+    _mask_array_to_pil
 )
-from backend.app.services.segmentation import ProductSegmentation
+from backend.app.services.segmentation import get_segmentation_singleton
 from backend.app.core.diffusion_presets import resolve_preset
 from backend.app.core.schemas import (
     DiffusionControlRequest,
@@ -33,24 +34,6 @@ router = APIRouter(prefix="/diffusion", tags=["Diffusion"])
 # ----------------------------------------------------------------------------
 _max_concurrency = int(os.getenv("DIFFUSION_MAX_CONCURRENCY", "1"))
 _request_semaphore = asyncio.Semaphore(max(1, _max_concurrency))
-
-# ----------------------------------------------------------------------
-# 전역 세그멘테이션 모델 (lazy load)
-# ----------------------------------------------------------------------
-_segmentation_model: Optional[ProductSegmentation] = None
-
-
-def _get_segmentation_model() -> ProductSegmentation:
-    global _segmentation_model
-    if _segmentation_model is None:
-        try:
-            _segmentation_model = ProductSegmentation()
-            print("[Segmentation] MobileSAM 로드 완료.")
-        except Exception as exc:
-            print(f"[Segmentation][ERROR] 모델 로드 실패: {exc}")
-            raise HTTPException(status_code=500, detail="Segmentation model load failed.")
-    return _segmentation_model
-
 
 # ======================================================================
 # 유틸리티 함수 (Base64 변환은 API 경계에서 처리)
@@ -118,7 +101,7 @@ def _run_auto_synthesis(
     2) CompositionMode 프리셋 + (옵션) override 해석
     3) diffusion_service.synthesize_image 호출
     """
-    model = _get_segmentation_model()
+    model = get_segmentation_singleton()
 
     # 1) segmentation: 전체 이미지 기준으로 누끼 따기
     mask_array, cutout_image = model.remove_background(original_image)
