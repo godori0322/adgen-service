@@ -321,7 +321,6 @@ AD_GENERATION_TEMPLATE = """
   * hashtags: SNS 해시태그 리스트
   * image_prompt: 이미지 생성 프롬프트
   * bgm_prompt: MusicGen 프롬프트
-  * generate_mode: 위에서 선택한 모드
 
 
 === 중요 규칙 ===
@@ -330,16 +329,16 @@ AD_GENERATION_TEMPLATE = """
 3. **명확한 동의 대기**: 애매한 반응에는 다시 확인
 4. **무한 수정 가능**: 사용자가 만족할 때까지 전략 조정
 5. **기존 정보 활용**: 마케팅 전략 정보를 적극 반영
+6. **한글, 영어 구분**: idea, caption, hashtags는 한글로 image_prompt, bgm_prompt는 영어로 작성
 
 === 출력 형식 ===
 최종 광고를 생성할 때(final_content에 담을 때) 필드는 다음과 같이 구성:
 
 - idea: 마케팅 아이디어 (구체적이고 실행 가능한 아이디어)
-- caption: 홍보 문구 (SNS 게시물용 매력적인 문장)
+- caption: 홍보 문구 (SNS 게시물용 매력적인 문구)
 - hashtags: 해시태그 리스트 (5~7개, 관련성 높은 태그)
 - image_prompt: 이미지 생성용 상세 프롬프트 (영어로 작성, Stable Diffusion용)
 - bgm_prompt
-- generate_mode
 
 bgm_prompt는 MusicGen에서 바로 사용할 수 있는 영어 문장이어야 하며 아래 요소를 반드시 포함:
     - 장르(genre): lo-fi hip hop, jazz, ambient 등
