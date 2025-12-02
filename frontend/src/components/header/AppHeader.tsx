@@ -46,9 +46,6 @@ export default function AppHeader() {
         {/* 로그인 상태 */}
         {isLogin ? (
           <>
-            {/* <Link to="/history" className="hover:text-blue-600">
-              히스토리
-            </Link> */}
             {location.pathname === "/" && (
               <button
                 onClick={handleNewChat}
