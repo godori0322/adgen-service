@@ -6,13 +6,17 @@ import TextInput from "../../components/common/TextInput";
 import { PageTitle } from "../../components/common/Title";
 import Toast from "../../components/common/Toast";
 import { useAuth } from "../../context/AuthContext";
+import { useChat } from "../../context/ChatContext";
 import { useToast } from "../../hooks/useToast";
+import { useVoiceChat } from "../../hooks/useVoiceChat";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
   const { toastMessage, showToast } = useToast();
+  const { resetMessages } = useChat();
+  const { resetChatFlow } = useVoiceChat();
 
   useEffect(() => {
     if (location.state?.registered) {
@@ -69,6 +73,8 @@ export default function LoginPage() {
     try {
       const data = await loginRequest(userName, password);
       login(data.access_token);
+      resetMessages();
+      resetChatFlow();
       navigate("/");
     } catch (err: any) {
       setFormError("아이디 또는 비밀번호를 확인해주세요.");

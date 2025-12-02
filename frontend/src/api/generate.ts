@@ -137,3 +137,11 @@ export async function insertCaptionPreviewRequest(
 export async function getTextListRequest() {
   return httpGet("/text/fonts");
 }
+
+
+// 사용자 이미지 누끼 체크
+export async function segmentationPreviewRequest(file: File) {
+  const form = new FormData();
+  form.append("file", file)
+  return httpPostForm("/segmentation_test/preview", form);
+}
