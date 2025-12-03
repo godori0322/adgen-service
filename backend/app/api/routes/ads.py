@@ -363,6 +363,7 @@ async def generate_ad(
             gpt_prompt=context_str,          # full 프롬프트 대신 context 요약 정도
             gpt_output_text=gpt_output_text, # GPT 결과 요약 문자열
             diffusion_prompt=image_prompt,
+            bgm_prompt=bgm_prompt,
             image_url=image_url,
             audio_url=audio_url,
             video_url=video_url,
@@ -381,6 +382,7 @@ async def generate_ad(
             caption=caption,
             hashtags=hashtags,
             image_prompt=image_prompt,
+            bgm_prompt=bgm_prompt,
             image_base64=image_base64,  # generate_image=False면 빈 문자열
             image_url=image_url,
             audio_url=audio_url,
