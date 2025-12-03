@@ -5,10 +5,11 @@ import ColorSelector from "../common/ColorSelector";
 
 interface Props {
   textData: any;
+  tempId: number;
   onComplete: (finalImg: string) => void;
 }
 
-export default function CaptionEditor({ textData, onComplete }: Props) {
+export default function CaptionEditor({ textData, tempId, onComplete }: Props) {
   const {
     fonts,
     fontMode,
@@ -110,7 +111,7 @@ export default function CaptionEditor({ textData, onComplete }: Props) {
         <div className="pt-2">
           <button
             onClick={async () => {
-              const res = await requestApply();
+              const res = await requestApply(tempId);
               if (!res.success) {
                 setAlert("문구 삽입에 실패했어요! 다시 시도해주세요 😥");
                 return;

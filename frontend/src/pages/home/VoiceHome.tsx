@@ -19,7 +19,6 @@ export default function VoiceHomePage() {
     isUiBlocking,
     onConfirmPreview,
     onRetryPreview,
-    setIsCaptionEditing,
   } = useVoiceChat();
   const { isPreviewLoading } = useImageFlow();
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -36,7 +35,6 @@ export default function VoiceHomePage() {
         onInsertCaption={onInsertCaption}
         onConfirmPreview={onConfirmPreview}
         onRetryPreview={onRetryPreview}
-        setIsCaptionEditing={setIsCaptionEditing}
       />
 
       <div ref={chatEndRef} />

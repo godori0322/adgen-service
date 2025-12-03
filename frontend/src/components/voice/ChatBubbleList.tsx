@@ -5,9 +5,9 @@ import ShareImageButton from "../common/ShareImageButton";
 import SkeletonBubble from "../common/SkeletonBubble";
 import BgmSelectBubble from "./BgmSelectBubble";
 import CaptionEditor from "./CaptionEditor";
+import ImageGuideBubble from "./ImageGuideBubble";
 import type { ImageMode } from "./ImageModeSelectorBubble";
 import ImageModeSelectorBubble from "./ImageModeSelectorBubble";
-import ImageGuideBubble from "./ImageGuideBubble";
 
 export default function ChatBubbleList({
   messages,
@@ -17,18 +17,16 @@ export default function ChatBubbleList({
   onInsertCaption,
   onConfirmPreview,
   onRetryPreview,
-  setIsCaptionEditing,
 }: {
   messages: ChatMessage[];
   onSelectMode: (mode: ImageMode) => void;
   onSelectBgmOption: (opt: "video" | "image" | "separate") => void;
   retryProcess: () => void;
-  onInsertCaption: (choice: boolean, tempId?: number) => void;
+  onInsertCaption: (choice: boolean, tempId?: number, finalImg?: string) => void;
   onConfirmPreview: (tempId: number) => void;
   onRetryPreview: () => void;
-  setIsCaptionEditing: (value: boolean) => void;
 }) {
-  const { addMessage, updateTempMessage } = useChat();
+  const { addMessage } = useChat();
 
   const downloadMedia = async (fileUrl: string, filename: string) => {
     const response = await fetch(fileUrl);
@@ -169,14 +167,9 @@ export default function ChatBubbleList({
                 {msg.captionEditor && (
                   <CaptionEditor
                     textData={msg.textData}
+                    tempId={msg.tempId!}
                     onComplete={(finalImg) => {
-                      updateTempMessage(msg.tempId!, {
-                        captionSelect: false,
-                        captionEditor: false,
-                        content: "문구 삽입 완료! 🎉",
-                        img: finalImg,
-                      });
-                      setIsCaptionEditing(false);
+                      onInsertCaption(true, msg.tempId, finalImg);
                     }}
                   />
                 )}
