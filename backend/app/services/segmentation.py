@@ -115,23 +115,24 @@ class ProductSegmentation:
         # 경계 부드럽게 (0~1 float)
         refined_mask = refine_mask(best_mask)
 
+        # mask를 다시 hard-edge mask로 sharpen
+        sharp_mask = (refined_mask > 0.5).astype(np.float32)
+
         # halo 제거
-        refined_mask = remove_halo(refined_mask)
+        # refined_mask = remove_halo(refined_mask)
 
-        # RGBA 컷아웃 생성
-        rgba_refined = self._create_cutout(img_rgb, refined_mask)
+        # Guided Filter 적용 (edge 보존 최고 효과)
+        gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
+        guided = guided_filter(gray, sharp_mask, r=6, eps=1e-4)
 
-        # 색상 decontamination
-        rgba_np = np.array(rgba_refined)[..., :3]
-        cleaned = color_decontaminate(rgba_np, refined_mask)
+        guided = np.clip(guided, 0, 1)
 
-        # numpy -> PIL
-        rgb_cutout = Image.fromarray(cleaned)
-        alpha = (refined_mask * 255).astype(np.uint8)
-        rgba_cutout = np.dstack([cleaned, alpha])
-        rgba_final = Image.fromarray(rgba_cutout)
+        # Final RGBA cutout
+        alpha = (guided * 255).astype(np.uint8)
+        rgba = np.dstack([img_rgb, alpha])
+        rgba_final = Image.fromarray(rgba)
 
-        return refined_mask, rgba_final
+        return guided, rgba_final
 
     # =========================================================
     # 3. 유틸 — RGBA cutout 생성
@@ -189,7 +190,7 @@ def mask_needs_invert(mask: np.ndarray) -> bool:
 # =============================================================
 # 5. 경계 부드럽게
 # =============================================================
-def refine_mask(mask: np.ndarray, blur_size: int = 9) -> np.ndarray:
+def refine_mask(mask: np.ndarray, blur_size: int = 5) -> np.ndarray:
     """
     mask: 0/1 (uint8 또는 bool)
     return: 0~1 float mask (blur 적용)
@@ -201,36 +202,66 @@ def refine_mask(mask: np.ndarray, blur_size: int = 9) -> np.ndarray:
 # =============================================================
 # 6. 경계의 halo 제거
 # =============================================================
-def remove_halo(mask_float: np.ndarray, erode_size=2, blur_size=7):
+def remove_halo(mask_float: np.ndarray, blur_size=5):
     """
     SAM이 만든 mask_float(0-1)을 입력받아 halo 제거 후 반환
     """
     mask = (mask_float * 255).astype(np.uint8)
 
-    # 1) erode로 경계 침식
-    kernel = np.ones((erode_size, erode_size), np.uint8)
-    eroded = cv2.erode(mask, kernel, iterations=1)
+    # morphological closing으로 작은 틈 메꾸기 (경계 보존)
+    kernel = np.ones((3, 3), np.uint8)
+    closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-    # 2) soft blur로 자연스럽게 보정
-    cleaned = cv2.GaussianBlur(eroded, (blur_size, blur_size), 0)
+    # 약한 blur로 smoothing
+    cleaned = cv2.GaussianBlur(closed, (blur_size, blur_size), 0)
 
-    # 3) 0-1 스케일 복구
     return cleaned.astype(np.float32) / 255.0
 
 # =============================================================
 # 7. 색상 decontamination
 # =============================================================
-def color_decontaminate(img_np, mask_float, strength=0.6):
+def color_decontaminate(img_np, mask_float, strength=0.1):
     """
     img_np: HXW RGB
     mask_float: 0-1 mask
     strength: 0-1 (0: 원본 유지, 1: 완전 decontaminate)
     """
     mask_expanded = np.clip(mask_float + 0.15, 0, 1)
-    blurred_img = cv2.GaussianBlur(img_np, (11, 11), 0)
+    blurred_img = cv2.GaussianBlur(img_np, (5, 5), 0)
 
     decont = img_np * mask_expanded[..., None] + blurred_img * (1 - mask_expanded[..., None]) * strength
     return decont.astype(np.uint8)
+
+# =============================================================
+# 8. Guided Filter
+# =============================================================
+def guided_filter(I, p, r, eps):
+    """
+    I: guidance image (gray)
+    p: mask_float
+    r: radius
+    eps: regularization
+    """
+    I = I.astype(np.float32)
+    p = p.astype(np.float32)
+
+    mean_I = cv2.boxFilter(I, -1, (r, r))
+    mean_p = cv2.boxFilter(p, -1, (r, r))
+    corr_I = cv2.boxFilter(I * I, -1, (r, r))
+    corr_Ip = cv2.boxFilter(I * p, -1, (r, r))
+
+    var_I = corr_I - mean_I * mean_I
+    cov_Ip = corr_Ip - mean_I * mean_p
+
+    a = cov_Ip / (var_I + eps)
+    b = mean_p - a * mean_I
+
+    mean_a = cv2.boxFilter(a, -1, (r, r))
+    mean_b = cv2.boxFilter(b, -1, (r, r))
+
+    q = mean_a * I + mean_b
+    return q
+
 
 # =============================================================
 # best mask 선택 유틸
