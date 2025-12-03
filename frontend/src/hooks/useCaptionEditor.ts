@@ -4,6 +4,7 @@ import {
   insertCaptionPreviewRequest,
   insertCaptionRequest,
 } from "../api/generate";
+import { useChat } from "../context/ChatContext";
 import { blobToBase64 } from "../utils/files";
 
 export function useCaptionEditor() {
@@ -18,6 +19,8 @@ export function useCaptionEditor() {
 
   const [previewImg, setPreviewImg] = useState<string>();
   const [loading, setLoading] = useState(false);
+
+  const { updateTempMessage } = useChat();
 
   //  폰트 목록 초기화
   useEffect(() => {
@@ -50,12 +53,15 @@ export function useCaptionEditor() {
     }
   };
 
-  const requestApply = async (): Promise<{ success: true; data: string } | { success: false }> => {
+  const requestApply = async (
+    tempId: number
+  ): Promise<{ success: true; data: string } | { success: false }> => {
     setLoading(true);
     try {
       if (!imgFile) {
         return { success: false };
       }
+      updateTempMessage(tempId, { loading: true });
       const result = await insertCaptionRequest(
         caption,
         fontMode,

@@ -361,7 +361,7 @@ export function useVoiceChat() {
     setNeedImage(true);
   };
 
-  const onInsertCaption = async (choice: boolean, tempId?: number) => {
+  const onInsertCaption = async (choice: boolean, tempId?: number, finalImg?: string) => {
     setIsCaptionEditing(false);
     setNeedImage(false);
 
@@ -373,10 +373,15 @@ export function useVoiceChat() {
         });
       }
     } else {
-      addMessage({
-        role: "assistant",
-        content: "문구 삽입 없이 완료되었어요 😊",
-      });
+      if (tempId && finalImg) {
+        updateTempMessage(tempId, {
+          captionSelect: false,
+          captionEditor: false,
+          content: "문구 삽입이 왼료되었어요! 🎉",
+          img: finalImg,
+          loading: false,
+        });
+      }
     }
 
     // 종료 안내 멘트
@@ -385,7 +390,9 @@ export function useVoiceChat() {
       content: `대화가 종료되었습니다 😊\n원하시면 음성으로 새로운 광고를 시작해주세요!`,
     });
 
-    resetChatFlow();
+    setTimeout(() => {
+      resetChatFlow();
+    }, 50);
   };
 
   const lastMsg = messages[messages.length - 1];
