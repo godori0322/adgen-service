@@ -178,10 +178,10 @@ def mask_needs_invert(mask: np.ndarray) -> bool:
     fg_ratio = np.mean(mask)
 
     # 조건 1: 중앙이 비어 있음 (기존 로직)
-    cond1 = center_ratio < 0.3
+    cond1 = center_ratio < 0.25
 
     # 조건 2: 거의 전체가 마스크 (배경 전체 감지한 경우)
-    cond2 = fg_ratio > 0.85
+    cond2 = fg_ratio > 0.9
 
     return cond1 or cond2
 
@@ -189,7 +189,7 @@ def mask_needs_invert(mask: np.ndarray) -> bool:
 # =============================================================
 # 5. 경계 부드럽게
 # =============================================================
-def refine_mask(mask: np.ndarray, blur_size: int = 13) -> np.ndarray:
+def refine_mask(mask: np.ndarray, blur_size: int = 9) -> np.ndarray:
     """
     mask: 0/1 (uint8 또는 bool)
     return: 0~1 float mask (blur 적용)
@@ -201,7 +201,7 @@ def refine_mask(mask: np.ndarray, blur_size: int = 13) -> np.ndarray:
 # =============================================================
 # 6. 경계의 halo 제거
 # =============================================================
-def remove_halo(mask_float: np.ndarray, erode_size=3, blur_size=7):
+def remove_halo(mask_float: np.ndarray, erode_size=2, blur_size=7):
     """
     SAM이 만든 mask_float(0-1)을 입력받아 halo 제거 후 반환
     """
@@ -318,7 +318,7 @@ def select_best_mask(img_rgb, masks):
         total_score = (
             0.45 * center_score +
             0.30 * edge_score +
-            0.05 * color_var_score +
+            0.02 * color_var_score +
             0.10 * area_ratio -
             0.20 * border_penalty
         )
