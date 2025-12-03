@@ -3,9 +3,10 @@ import { useState } from "react";
 import { segmentationPreviewRequest } from "../api/generate";
 import { useChat } from "../context/ChatContext";
 import { fileToBase64 } from "../utils/files";
+import { resizeImage } from "../utils/resizeImage";
 
 export function useImageFlow() {
-  const { messages, addMessage, updateTempMessage } = useChat();
+  const { addMessage, updateTempMessage } = useChat();
 
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
   const [previewCutImage, setPreviewCutImage] = useState<string | null>(null);
@@ -16,9 +17,11 @@ export function useImageFlow() {
   // 이미지 업로드 시, 누끼 preview만 요청
   const requestPreview = async (file: File) => {
     setIsPreviewLoading(true);
-    setUploadedImageFile(file);
-
+    
+    const loadingTempId = Date.now();
     try {
+      file = await resizeImage(file, 1024);
+      setUploadedImageFile(file);
       const base64Img = await fileToBase64(file);
 
       // 유저가 올린 원본 이미지 버블
@@ -28,7 +31,6 @@ export function useImageFlow() {
         img: base64Img,
       });
 
-      const loadingTempId = Date.now();
       addMessage({
         role: "assistant",
         content: `이미지를 분석하고 있어요 🔍\n잠시만 기다려주세요!`,
@@ -52,9 +54,8 @@ export function useImageFlow() {
       });
     } catch (err) {
       console.error("이미지 분석 실패:", err);
-      const last = messages[messages.length - 1];
-      if (last.tempId) {
-        updateTempMessage(last.tempId, {
+      if (loadingTempId) {
+        updateTempMessage(loadingTempId, {
           content: "😢 이미지 분석에 실패했어요! 다시 업로드 해주세요.",
           fail: true,
         });
