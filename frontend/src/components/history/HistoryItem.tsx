@@ -29,8 +29,8 @@ export default function HistoryItem({ item, onClick }: HistoryItemProps) {
       className="flex sm:flex-row flex-col items-start cursor-pointer group gap-2"
       onClick={onClick}
     >
-      {/* 이미지 */}
-      <div className="relative w-48 h-48 rounded-xl bg-gray-100 overflow-hidden shrink-0 border border-gray-200">
+      {/* 이미지 영역 */}
+      <div className="relative w-full sm:w-48 h-56 sm:h-48  rounded-xl bg-gray-100 overflow-hidden shrink-0 border border-gray-200">
         {imgLoading && !imgError && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="animate-spin h-7 w-7 border-2 border-gray-300 border-t-transparent rounded-full" />
@@ -64,15 +64,9 @@ export default function HistoryItem({ item, onClick }: HistoryItemProps) {
       </div>
 
       {/* 텍스트 카드 */}
-      <div
-        className="bg-white border border-gray-200 rounded-xl shadow-[0_2px_6px_rgba(0,0,0,0.05)] 
-                     p-4 flex flex-col gap-2 w-full min-h-48
-                     transition-all group-hover:shadow-md"
-      >
+      <div className="bg-white border border-gray-200 rounded-xl shadow-[0_2px_6px_rgba(0,0,0,0.05)] p-4 flex flex-col gap-2 w-full min-h-48 transition-all group-hover:shadow-md">
         <p className="text-xs text-gray-400">{createdDate}</p>
-
         <p className="text-base font-medium text-gray-900 line-clamp-3 leading-snug">{idea}</p>
-
         <div className="mt-auto text-lg flex gap-1 opacity-80">
           {image_url && <span>🖼️</span>}
           {audio_url && <span>🎧</span>}

@@ -33,7 +33,10 @@ export function useImageFlow() {
 
       addMessage({
         role: "assistant",
-        content: `이미지를 분석하고 있어요 🔍\n잠시만 기다려주세요!`,
+        content: `
+        이미지를 분석하고 있어요 🔍
+        
+        잠시만 기다려주세요!`,
         tempId: loadingTempId,
         loading: true,
       });

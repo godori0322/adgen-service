@@ -41,7 +41,7 @@ export default function CaptionEditor({ textData, onComplete }: Props) {
   return (
     <>
       <div className="p-5 mt-2 space-y-6 bg-white rounded-2xl shadow-md border border-gray-100">
-        {/* 프리뷰 */}
+        {/* 📌 이미지 프리뷰 */}
         <div
           className="relative w-full rounded-xl overflow-hidden shadow-inner bg-gray-200"
           style={{ paddingBottom: `${ratio}%` }}
@@ -53,15 +53,16 @@ export default function CaptionEditor({ textData, onComplete }: Props) {
               className="absolute top-0 left-0 w-full h-full object-contain transition-all"
             />
           ) : (
-            <div className="absolute top-0 left-0 w-full h-full bg-gray-300 animate-pulse grid place-items-center text-gray-500">
+            <div className="absolute inset-0 bg-gray-300 animate-pulse grid place-items-center text-gray-500">
               미리보기 로딩...
             </div>
           )}
         </div>
-        {/* 옵션 선택 영역 */}
-        <div className="grid grid-cols-2 gap-6">
-          {/* 좌측 - 폰트 & 위치 */}
-          <div className="flex flex-col gap-6">
+
+        {/* 📌 옵션 영역 */}
+        <div className="flex flex-col sm:flex-row gap-6">
+          {/* 좌측: 폰트 / 위치 */}
+          <div className="flex-1 flex flex-col gap-6">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold text-gray-700">폰트 선택</label>
               <select
@@ -76,21 +77,20 @@ export default function CaptionEditor({ textData, onComplete }: Props) {
                 ))}
               </select>
             </div>
+
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold text-gray-700">텍스트 위치</label>
               <div className="grid grid-cols-3 gap-2">
                 {positions.map((position) => (
                   <button
                     key={position.value}
-                    onClick={() => setMode(position.value as "top" | "middle" | "bottom")}
-                    className={`
-              py-2 rounded-lg border text-sm font-semibold transition-all
-              ${
-                mode === position.value
-                  ? "bg-blue-600 text-white shadow-md scale-105"
-                  : "bg-white text-gray-700 hover:bg-blue-50"
-              }
-              `}
+                    onClick={() => setMode(position.value as any)}
+                    className={`py-2 rounded-lg border text-sm font-semibold transition-all
+                      ${
+                        mode === position.value
+                          ? "bg-blue-600 text-white shadow-md scale-105"
+                          : "bg-white text-gray-700 hover:bg-blue-50"
+                      }`}
                   >
                     {position.label}
                   </button>
@@ -99,42 +99,33 @@ export default function CaptionEditor({ textData, onComplete }: Props) {
             </div>
           </div>
 
-          {/* 우측 - 색상 선택 */}
-          <div className="flex flex-col gap-1.5">
-            {/* 텍스트 생상 */}
+          {/* 우측: 텍스트 색상 */}
+          <div className="flex-1 flex flex-col gap-1.5">
             <label className="text-sm font-semibold text-gray-700">텍스트 색상</label>
-            <ColorSelector
-              color={textColor}
-              onChange={(newColor) => {
-                setTextColor(newColor);
-              }}
-            />
+            <ColorSelector color={textColor} onChange={setTextColor} />
           </div>
         </div>
-        <button
-          onClick={async () => {
-            const res = await requestApply();
-            if (!res.success) {
-              setAlert("문구 삽입에 실패했어요! 다시 시도해주세요 😥");
-              return;
-            }
 
-            onComplete(res.data);
-          }}
-          className="bg-green-500 text-white px-4 py-2 rounded-lg mt-3"
-        >
-          캡션 적용하기
-        </button>
+        {/* 📌 버튼 영역 (항상 아래 풀폭) */}
+        <div className="pt-2">
+          <button
+            onClick={async () => {
+              const res = await requestApply();
+              if (!res.success) {
+                setAlert("문구 삽입에 실패했어요! 다시 시도해주세요 😥");
+                return;
+              }
+              onComplete(res.data);
+            }}
+            className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-xl font-bold shadow-md transition"
+          >
+            캡션 적용하기 💡
+          </button>
+        </div>
       </div>
-      {
-        alert && (
-          <AlertModal
-            onClose={() => setAlert(null)}
-            title="오류 발생"
-            message={alert}
-          />
-        )
-      }
+
+      {/* 오류 Modal */}
+      {alert && <AlertModal onClose={() => setAlert(null)} title="오류 발생" message={alert} />}
     </>
   );
 }
