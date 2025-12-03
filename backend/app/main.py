@@ -6,6 +6,8 @@ import os
 from backend.app.services.segmentation import get_segmentation_singleton
 from backend.app.services.diffusion_service import _load_pipeline
 import asyncio
+
+
 # Hugging Face / Diffusers / Transformers 캐시를 공용 디렉토리로 지정
 CACHE_DIR = "/home/shared/models"
 for key in [

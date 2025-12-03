@@ -11,7 +11,7 @@ from tempfile import NamedTemporaryFile
 
 
 # media 루트 디렉토리 ---> DB 기능 / shared directory로 변경 필요
-MEDIA_ROOT = Path("media")
+MEDIA_ROOT = Path("/media")
 IMAGE_DIR = MEDIA_ROOT / "images"
 VIDEO_DIR = MEDIA_ROOT / "video"
 
@@ -100,7 +100,7 @@ def compose_image_and_audio_to_mp4(
     video_clip = image_clip.with_audio(audio_clip)
 
     # 4) 출력 디렉터리 및 파일 경로 설정
-    output_dir = Path("media/video")
+    output_dir = VIDEO_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = output_dir / f"{uuid4().hex}.mp4"
