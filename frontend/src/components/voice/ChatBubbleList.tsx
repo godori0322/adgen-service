@@ -7,6 +7,7 @@ import BgmSelectBubble from "./BgmSelectBubble";
 import CaptionEditor from "./CaptionEditor";
 import type { ImageMode } from "./ImageModeSelectorBubble";
 import ImageModeSelectorBubble from "./ImageModeSelectorBubble";
+import ImageGuideBubble from "./ImageGuideBubble";
 
 export default function ChatBubbleList({
   messages,
@@ -98,7 +99,7 @@ export default function ChatBubbleList({
                     {(msg.content || "").replace(/\\n/g, "\n")}
                   </ReactMarkdown>
                 )}
-
+                {msg.imageGuide && <ImageGuideBubble />}
                 {/* 오디오 */}
                 {msg.audio && (
                   <audio controls className="w-full mt-3 rounded-lg">

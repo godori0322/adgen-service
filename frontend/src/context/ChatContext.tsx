@@ -24,6 +24,7 @@ export interface ChatMessage {
   previewConfirmed?: boolean;
   previewRejected?: boolean;
   loading?: boolean;
+  imageGuide?: boolean;
 }
 
 interface ChatContextValue {

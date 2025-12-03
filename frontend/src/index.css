@@ -2,11 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-
 body {
   @apply font-sans;
 }
 
-html, body {
-  font-family: 'Pretendard', sans-serif;
+html,
+body {
+  font-family: "Pretendard", sans-serif;
+}
+/* 
+.markdown-content {
+  white-space: pre-line;
+} */
+.num-emoji {
+  font-size: 1.4rem !important;
+  font-weight: 900 !important;
+  margin-right: 6px !important;
+}
+
+.guide-title {
+  font-size: 1.12rem !important;
+  font-weight: 700 !important;
+  color: #1f2937 !important; /* gray-800 */
+  line-height: 1.35 !important;
+  display: inline-block !important;
+  margin-bottom: 3px !important;
+}
+
+.markdown-content p {
+  margin: 4px 0 !important;
+  line-height: 1.5 !important;
+  white-space: pre-line !important;
 }

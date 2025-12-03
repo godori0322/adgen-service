@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import { adsGenerateRequest, generateDialogueRequest, uploadImage } from "../api/generate";
 import type { ImageMode } from "../components/voice/ImageModeSelectorBubble";
-import { IMAGE_GUIDE_MESSAGE } from "../constants/chat";
 import { useAuth } from "../context/AuthContext";
 import { useChat } from "../context/ChatContext";
 import { formatChatResponse } from "../utils/chatFormatter";
@@ -251,7 +250,8 @@ export function useVoiceChat() {
       if (!uploadedImageFile && adRes.type === "ad" && !isResetRef.current) {
         setNeedImage(true);
         updateTempMessage(assistantTempId, {
-          content: IMAGE_GUIDE_MESSAGE,
+          content: "",
+          imageGuide: true,
         });
         return;
       }
@@ -355,7 +355,8 @@ export function useVoiceChat() {
     });
     addMessage({
       role: "assistant",
-      content: IMAGE_GUIDE_MESSAGE,
+      content: "",
+      imageGuide: true,
     });
     setNeedImage(true);
   };
