@@ -22,7 +22,7 @@ class ProductSegmentation:
     def __init__(
         self,
         sam_model_type: str = "vit_b",
-        sam_max_size: int = 768,   # SAM 입력 최대 해상도(긴 변 기준, 필요 시 사용)
+        sam_max_size: int = 1024,   # SAM 입력 최대 해상도(긴 변 기준, 필요 시 사용)
         points_per_side: int = 24, # 자동 마스크 생성 정밀도 (필요시 조절)
         upscaler_scale: int = 2,
     ):
@@ -79,6 +79,20 @@ class ProductSegmentation:
             print("[Segmentation] SAM 모델 및 자동 마스크 제너레이터 로드 완료.")
 
     # =========================================================
+    # 4. 유틸 — 안전 리사이징
+    # =========================================================
+    def _resize_for_sam(self, image: Image.Image):
+        w, h = image.size
+        max_side = max(w, h)
+        if max_side <= self.sam_max_size:
+            return image
+
+        scale = self.sam_max_size / max_side
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        return image.resize((new_w, new_h), Image.LANCZOS)
+
+    # =========================================================
     # 2. PUBLIC API — 최종 누끼 (SAM 단독)
     # =========================================================
     def remove_background(self, image: Image.Image):
@@ -93,6 +107,9 @@ class ProductSegmentation:
             rgba_cutout (PIL.Image, RGBA)
         """
         self._ensure_models_loaded()
+
+        # 🔥 SAM-safe resize
+        image = self._resize_for_sam(image)
 
         img_rgb = np.array(image.convert("RGB"))
 
