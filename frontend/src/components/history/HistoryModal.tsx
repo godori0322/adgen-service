@@ -132,6 +132,12 @@ export default function HistoryModal({ item, onClose, onPrev, onNext }: Props) {
                 {item.hashtags}
               </p>
             )}
+
+            <div className="mt-auto pt-4 text-xl flex gap-2 text-gray-500">
+              {item.image_url && <span title="이미지 포함">🖼️</span>}
+              {item.audio_url && <span title="오디오 포함">🎧</span>}
+              {item.video_url && <span title="비디오 포함">🎬</span>}
+            </div>
           </div>
         </div>
 

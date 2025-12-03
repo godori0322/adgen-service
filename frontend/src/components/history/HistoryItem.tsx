@@ -26,17 +26,14 @@ export default function HistoryItem({ item, onClick }: HistoryItemProps) {
 
   return (
     <div
-      className="flex gap-4 items-start cursor-pointer rounded-2xl bg-white
-             shadow-sm border border-gray-200 p-5 transition-all
-             hover:shadow-lg hover:-translate-y-1 active:scale-[0.98]
-             duration-200 relative"
+      className="flex sm:flex-row flex-col items-start cursor-pointer group gap-2"
       onClick={onClick}
     >
-      {/* 썸네일 */}
-      <div className="relative w-48 h-48 rounded-xl overflow-hidden shrink-0 bg-gray-100">
+      {/* 이미지 */}
+      <div className="relative w-48 h-48 rounded-xl bg-gray-100 overflow-hidden shrink-0 border border-gray-200">
         {imgLoading && !imgError && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="animate-spin h-7 w-7 border-2 border-gray-400 border-t-transparent rounded-full" />
+            <div className="animate-spin h-7 w-7 border-2 border-gray-300 border-t-transparent rounded-full" />
           </div>
         )}
 
@@ -44,7 +41,7 @@ export default function HistoryItem({ item, onClick }: HistoryItemProps) {
           <img
             src={mediaEndpoint + image_url}
             alt="thumbnail"
-            className={`object-cover w-full h-full transition-opacity duration-300 ${
+            className={`object-cover object-center w-full h-full transition-opacity duration-300 ${
               imgLoading ? "opacity-0" : "opacity-100"
             }`}
             onLoad={() => setImgLoading(false)}
@@ -56,32 +53,31 @@ export default function HistoryItem({ item, onClick }: HistoryItemProps) {
         )}
 
         {imgError && (
-          <span className="absolute inset-0 text-xl flex justify-center items-center">🖼️❌</span>
+          <span className="text-3xl absolute inset-0 flex items-center justify-center">❌</span>
         )}
 
         {!image_url && !imgError && (
-          <span className="absolute inset-0 text-4xl flex justify-center items-center">
+          <span className="text-3xl absolute inset-0 flex items-center justify-center">
             {video_url ? "🎬" : audio_url ? "🎧" : "📝"}
           </span>
         )}
       </div>
 
-      {/* 텍스트 */}
-      <div className="flex flex-col flex-1 min-w-0 pr-12">
-        {/* 날짜 */}
-        <p className="text-sm text-gray-400 font-medium mb-1.5">{createdDate}</p>
+      {/* 텍스트 카드 */}
+      <div
+        className="bg-white border border-gray-200 rounded-xl shadow-[0_2px_6px_rgba(0,0,0,0.05)] 
+                     p-4 flex flex-col gap-2 w-full min-h-48
+                     transition-all group-hover:shadow-md"
+      >
+        <p className="text-xs text-gray-400">{createdDate}</p>
 
-        {/* 제목 */}
-        <p className="text-[18px] font-medium text-gray-700 leading-snug line-clamp-3 mt-3">
-          {idea}
-        </p>
-      </div>
+        <p className="text-base font-medium text-gray-900 line-clamp-3 leading-snug">{idea}</p>
 
-      {/* 아이콘 — 카드 오른쪽 아래 고정 */}
-      <div className="absolute bottom-4 right-4 text-xl flex gap-1 opacity-70">
-        {image_url && <span>🖼️</span>}
-        {audio_url && <span>🎧</span>}
-        {video_url && <span>🎬</span>}
+        <div className="mt-auto text-lg flex gap-1 opacity-80">
+          {image_url && <span>🖼️</span>}
+          {audio_url && <span>🎧</span>}
+          {video_url && <span>🎬</span>}
+        </div>
       </div>
     </div>
   );
