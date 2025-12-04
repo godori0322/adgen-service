@@ -146,7 +146,7 @@ adgen-service
 ├── backend/                        # FastAPI Backend
 │   ├── app/
 │   │   ├── api/                   # API 라우터
-│   │   ├── core/                  # 설정 및 공통 모듈
+│   │   ├── core/                  # 스키마 및 데이터 모델들
 │   │   ├── services/              # 주요 비즈니스 로직
 │   │   ├── main.py                # FastAPI 엔트리포인트
 │   │   └── __init__.py
