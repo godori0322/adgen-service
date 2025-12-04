@@ -9,7 +9,7 @@
 ➡️ **https://adgen4.duckdns.org/**
 
 ### 최종 보고서(PDF)  
-➡️ (추가 예정)
+➡️ **https://github.com/godori0322/adgen-service/blob/main/4%ED%8C%80_%EC%B5%9C%EC%A2%85_%EB%B3%B4%EA%B3%A0%EC%84%9C.pdf**
 
 ### 협업 일지 링크  
 [고인범](https://excited-citrine-4e4.notion.site/2a239a4cb3f580b99577fa64e8368661?pvs=74)       
