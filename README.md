@@ -146,8 +146,6 @@ AdGen은 단일 VM에서 동작하며, Nginx가 다음과 같이 라우팅합니
 5. MinIO에 저장 후 UI에 표시  
 6. 다운로드하여 SNS 등에서 활용 가능  
 
-(시연 영상은 추후 README에 추가 예정)
-
 ---
 
 # Repository Structure
