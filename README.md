@@ -148,7 +148,6 @@ adgen-service
 │   │   ├── api/                   # API 라우터
 │   │   ├── core/                  # 설정 및 공통 모듈
 │   │   ├── services/              # 주요 비즈니스 로직
-│   │   ├── weights/               
 │   │   ├── main.py                # FastAPI 엔트리포인트
 │   │   └── __init__.py
 │   ├── alembic/                   # DB 마이그레이션
