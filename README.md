@@ -141,29 +141,45 @@ AdGen은 단일 VM에서 동작하며, Nginx가 다음과 같이 라우팅합니
 
 # 📂 Repository Structure (예시, 수정 예정)
 
-/backend
-
-├── app
-
-│ ├── api
-
-│ ├── services
-
-│ ├── core
-
-│ └── utils
-
-/frontend
-
-├── src
-
-├── public
-
-infrastructure
-
-├── nginx.conf
-
-README.md
+```
+adgen-service
+├── backend/                        # FastAPI Backend
+│   ├── app/
+│   │   ├── api/                   # API 라우터
+│   │   ├── core/                  # 설정 및 공통 모듈
+│   │   ├── services/              # 주요 비즈니스 로직
+│   │   ├── weights/               
+│   │   ├── main.py                # FastAPI 엔트리포인트
+│   │   └── __init__.py
+│   ├── alembic/                   # DB 마이그레이션
+│   │   └── versions/              # 변경 이력
+│   ├── alembic.ini                       
+│   ├── db/                        # DB 초기화 스크립트
+│   └── init_db.py                 # 초기 DB 세팅 스크립트
+│
+├── frontend/                       # React + TypeScript Frontend (Vite)
+│   ├── public/                    # HTML 템플릿 및 정적 파일
+│   ├── src/
+│   │   ├── api/                   # API 연동 모듈
+│   │   ├── components/            # UI 컴포넌트
+│   │   ├── hooks/                 # 커스텀 훅
+│   │   ├── pages/                 # 라우팅 페이지
+│   │   ├── router/                # 라우터 설정
+│   │   ├── styles/                # Tailwind 및 전역 스타일
+│   │   ├── types/                 # TypeScript 타입 선언
+│   │   └── utils/                 # 유틸리티 함수
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.ts
+│
+├── nginx/                          # Nginx Reverse Proxy 설정
+│   └── nginx.conf
+│
+├── docker-compose.yml              # 컨테이너 구성(ES/MinIO 등)
+├── ecosystem.config.js             # PM2 프로세스관리 설정
+├── pyproject.toml                  # Python 프로젝트 설정
+└── README.md
+```
 
 
 ---
